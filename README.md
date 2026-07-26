@@ -115,4 +115,4 @@ Released under the [MIT License](./LICENSE) — free to use, modify, and deploy 
 
 ## 🙏 Credits
 
-Built by [Safwan](https://github.com/) with help from Claude. Maintenance intervals are general rule-of-thumb figures for personal reference — always double-check against your vehicle's owner manual or workshop advice for anything safety-critical (brakes, tires, etc).
+Built by [Safwan a.k.a Korok]([https://github.com/](https://github.com/Kengkorok)) with help from Claude. Maintenance intervals are general rule-of-thumb figures for personal reference — always double-check against your vehicle's owner manual or workshop advice for anything safety-critical (brakes, tires, etc).
