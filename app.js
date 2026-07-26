@@ -81,18 +81,42 @@ function typeDef(typeKey) {
   return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.custom;
 }
 
+// ---------- INTERVAL OVERRIDES ----------
+// Setiap kenderaan boleh ada "intervals" tersendiri (diisi semasa daftar / diubah kemudian)
+// yang override nilai default dalam schedules.js. Shape sentiasa:
+//   bukan-minyak: { km, months }
+//   ada jenis minyak: { oilTypes: { semi: {km, months}, fully: {km, months} } }
+function effectiveInterval(vehicle, itemKey, itemDef) {
+  const ov = (vehicle.intervals || {})[itemKey] || {};
+  if (itemDef.hasOilType) {
+    const out = { oilTypes: {} };
+    Object.entries(itemDef.oilTypes).forEach(([ok, odef]) => {
+      out.oilTypes[ok] = {
+        km: ov.oilTypes?.[ok]?.km ?? odef.km ?? null,
+        months: ov.oilTypes?.[ok]?.months ?? odef.months ?? null
+      };
+    });
+    return out;
+  }
+  return {
+    km: ov.km ?? itemDef.km ?? null,
+    months: ov.months ?? itemDef.months ?? null
+  };
+}
+
 // Kira status untuk satu item berjadual (bukan custom)
 function computeItemStatus(vehicle, itemKey, itemDef) {
   const log = (vehicle.serviceLog || {})[itemKey];
-  let intervalKm = itemDef.km ?? null;
-  let intervalMonths = itemDef.months ?? null;
+  const eff = effectiveInterval(vehicle, itemKey, itemDef);
+  let intervalKm = itemDef.hasOilType ? null : eff.km;
+  let intervalMonths = itemDef.hasOilType ? null : eff.months;
   let oilType = null;
 
   if (itemDef.hasOilType) {
     oilType = log?.oilType || null;
-    if (oilType && itemDef.oilTypes[oilType]) {
-      intervalKm = itemDef.oilTypes[oilType].km ?? null;
-      intervalMonths = itemDef.oilTypes[oilType].months ?? null;
+    if (oilType && eff.oilTypes[oilType]) {
+      intervalKm = eff.oilTypes[oilType].km ?? null;
+      intervalMonths = eff.oilTypes[oilType].months ?? null;
     } else {
       intervalKm = null;
       intervalMonths = null;
@@ -179,6 +203,75 @@ function worstStatus(vehicle) {
   return worst;
 }
 
+// Bina HTML satu "interval-group" untuk satu item (dipakai di borang daftar & borang ubah interval)
+function renderIntervalGroupHTML(itemKey, def, values) {
+  let inner = "";
+  if (def.hasOilType) {
+    inner = `
+      <div class="interval-subtitle">Semi Sintetik</div>
+      <div class="interval-row">
+        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="semiKm" value="${values.oilTypes.semi.km ?? ""}"></div>
+        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="semiMonths" value="${values.oilTypes.semi.months ?? ""}"></div>
+      </div>
+      <div class="interval-subtitle">Fully Sintetik</div>
+      <div class="interval-row">
+        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="fullyKm" value="${values.oilTypes.fully.km ?? ""}"></div>
+        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="fullyMonths" value="${values.oilTypes.fully.months ?? ""}"></div>
+      </div>
+    `;
+  } else {
+    inner = `
+      <div class="interval-row">
+        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="km" value="${values.km ?? ""}" placeholder="kosongkan jika tiada"></div>
+        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="months" value="${values.months ?? ""}" placeholder="kosongkan jika tiada"></div>
+      </div>
+    `;
+  }
+  return `
+    <div class="interval-group" data-item-key="${itemKey}">
+      <div class="interval-group-title">${def.label}</div>
+      ${def.note ? `<div class="interval-group-note">${def.note}</div>` : ""}
+      ${inner}
+    </div>
+  `;
+}
+
+// Render borang interval untuk SEMUA item satu jenis kenderaan (dipakai di modal Daftar Kenderaan)
+function renderIntervalForm(containerEl, items) {
+  containerEl.innerHTML = Object.entries(items).map(([key, def]) => {
+    const defaultValues = def.hasOilType
+      ? { oilTypes: { semi: { ...def.oilTypes.semi }, fully: { ...def.oilTypes.fully } } }
+      : { km: def.km ?? null, months: def.months ?? null };
+    return renderIntervalGroupHTML(key, def, defaultValues);
+  }).join("");
+}
+
+// Baca semula nilai dari borang interval -> { itemKey: {km,months} atau {oilTypes:{...}} }
+function collectIntervalsFromForm(containerEl, items) {
+  const intervals = {};
+  containerEl.querySelectorAll(".interval-group").forEach((group) => {
+    const key = group.dataset.itemKey;
+    const def = items[key];
+    if (!def) return;
+    const val = (sel) => {
+      const el = group.querySelector(`[data-field="${sel}"]`);
+      if (!el || el.value === "") return null;
+      return Number(el.value);
+    };
+    if (def.hasOilType) {
+      intervals[key] = {
+        oilTypes: {
+          semi: { km: val("semiKm"), months: val("semiMonths") },
+          fully: { km: val("fullyKm"), months: val("fullyMonths") }
+        }
+      };
+    } else {
+      intervals[key] = { km: val("km"), months: val("months") };
+    }
+  });
+  return intervals;
+}
+
 // ---------- RENDER: VEHICLE LIST ----------
 function renderVehicleList() {
   const listEl = document.getElementById("vehicleList");
@@ -236,7 +329,7 @@ function renderDetail(id) {
   Object.entries(td.items).forEach(([key, def]) => {
     const s = computeItemStatus(v, key, def);
     const log = (v.serviceLog || {})[key];
-    itemsHtml += renderItemCard(v.id, key, def, s, log);
+    itemsHtml += renderItemCard(v, key, def, s, log);
   });
 
   let customHtml = "";
@@ -262,12 +355,25 @@ function renderDetail(id) {
     <div class="item-list">${customHtml}</div>
     <div style="margin-top:12px;">
       <button class="btn btn-secondary btn-sm" onclick="openAddCustomItemModal('${v.id}')">+ Tambah Item</button>
-      <button class="btn btn-link btn-sm" onclick="confirmDeleteVehicle('${v.id}')">Padam Kenderaan Ini</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteVehicle('${v.id}')">Padam Kenderaan Ini</button>
     </div>
   `;
 }
 
-function renderItemCard(vehicleId, key, def, s, log) {
+function intervalSummaryText(def, eff) {
+  if (def.hasOilType) {
+    const s = eff.oilTypes.semi, f = eff.oilTypes.fully;
+    const sPart = [s.km != null ? fmtKm(s.km) : null, s.months != null ? s.months + " bulan" : null].filter(Boolean).join(" / ");
+    const fPart = [f.km != null ? fmtKm(f.km) : null, f.months != null ? f.months + " bulan" : null].filter(Boolean).join(" / ");
+    return `Semi: ${sPart || "-"} &nbsp;•&nbsp; Fully: ${fPart || "-"}`;
+  }
+  const part = [eff.km != null ? fmtKm(eff.km) : null, eff.months != null ? eff.months + " bulan" : null].filter(Boolean).join(" / ");
+  return part || "Tiada interval ditetapkan";
+}
+
+function renderItemCard(vehicle, key, def, s, log) {
+  const vehicleId = vehicle.id;
+  const eff = effectiveInterval(vehicle, key, def);
   let metaLines = [];
   if (s.status === "na") {
     metaLines.push("Belum ada rekod servis — log servis pertama untuk mula tracking.");
@@ -278,6 +384,7 @@ function renderItemCard(vehicleId, key, def, s, log) {
     if (s.oilType && def.oilTypes) metaLines.push(`Jenis minyak digunakan: ${def.oilTypes[s.oilType].label}`);
     if (log?.lastNote) metaLines.push(`Nota: ${log.lastNote}`);
   }
+  metaLines.push(`Interval semasa: ${intervalSummaryText(def, eff)}`);
   if (def.note) metaLines.push(`<em>${def.note}</em>`);
 
   return `
@@ -289,6 +396,7 @@ function renderItemCard(vehicleId, key, def, s, log) {
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
         <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">Log Servis</button>
+        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">✎ Ubah Interval</button>
       </div>
     </div>
   `;
@@ -329,6 +437,15 @@ window.openAddVehicleModal = function () {
   sel.innerHTML = Object.entries(VEHICLE_TYPES).map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join("");
   document.getElementById("newVehiclePlate").value = "";
   document.getElementById("newVehicleMileage").value = "";
+
+  const intervalsEl = document.getElementById("newVehicleIntervals");
+  const renderForSelected = () => {
+    const td = typeDef(sel.value);
+    renderIntervalForm(intervalsEl, td.items);
+  };
+  sel.onchange = renderForSelected;
+  renderForSelected();
+
   document.getElementById("addVehicleModal").style.display = "flex";
 };
 window.submitAddVehicle = async function () {
@@ -336,12 +453,45 @@ window.submitAddVehicle = async function () {
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
   const mileage = Number(document.getElementById("newVehicleMileage").value || 0);
   if (!plateNo) return showToast("Sila isi no. pendaftaran");
+
+  const td = typeDef(typeKey);
+  const intervalsEl = document.getElementById("newVehicleIntervals");
+  const intervals = collectIntervalsFromForm(intervalsEl, td.items);
+
   await addDoc(collection(db, "vehicles"), {
     typeKey, plateNo, currentMileage: mileage,
-    serviceLog: {}, customItems: [], createdAt: serverTimestamp()
+    serviceLog: {}, customItems: [], intervals,
+    createdAt: serverTimestamp()
   });
   closeModal("addVehicleModal");
   showToast("Kenderaan didaftarkan ✅");
+};
+
+// Edit Interval (satu item, selepas daftar)
+let editIntervalTarget = { vehicleId: null, itemKey: null };
+window.openEditIntervalModal = function (vehicleId, itemKey) {
+  editIntervalTarget = { vehicleId, itemKey };
+  const v = vehicles.find((x) => x.id === vehicleId);
+  const td = typeDef(v.typeKey);
+  const def = td.items[itemKey];
+  const eff = effectiveInterval(v, itemKey, def);
+
+  document.getElementById("editIntervalTitle").textContent = "Ubah Interval — " + def.label;
+  const container = document.getElementById("editIntervalFields");
+  container.innerHTML = renderIntervalGroupHTML(itemKey, def, eff);
+  document.getElementById("editIntervalModal").style.display = "flex";
+};
+window.submitEditInterval = async function () {
+  const { vehicleId, itemKey } = editIntervalTarget;
+  const v = vehicles.find((x) => x.id === vehicleId);
+  const td = typeDef(v.typeKey);
+  const container = document.getElementById("editIntervalFields");
+  const intervals = collectIntervalsFromForm(container, td.items);
+  await updateDoc(doc(db, "vehicles", vehicleId), {
+    [`intervals.${itemKey}`]: intervals[itemKey]
+  });
+  closeModal("editIntervalModal");
+  showToast("Interval dikemaskini ✅");
 };
 
 // Update Mileage
@@ -447,9 +597,16 @@ window.deleteCustomItem = async function (vehicleId, itemId) {
   showToast("Item dipadam");
 };
 
-window.confirmDeleteVehicle = async function (vehicleId) {
-  if (!confirm("Padam kenderaan ini dan semua rekod servisnya?")) return;
-  await deleteDoc(doc(db, "vehicles", vehicleId));
+let pendingDeleteVehicleId = null;
+window.confirmDeleteVehicle = function (vehicleId) {
+  pendingDeleteVehicleId = vehicleId;
+  document.getElementById("deleteVehicleModal").style.display = "flex";
+};
+window.submitDeleteVehicle = async function () {
+  if (!pendingDeleteVehicleId) return;
+  await deleteDoc(doc(db, "vehicles", pendingDeleteVehicleId));
+  pendingDeleteVehicleId = null;
+  closeModal("deleteVehicleModal");
   closeDetailView();
   showToast("Kenderaan dipadam");
 };
