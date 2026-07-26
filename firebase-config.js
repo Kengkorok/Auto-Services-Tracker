@@ -1,14 +1,8 @@
-// ============================================================
-// GANTI nilai di bawah dengan Firebase config projek ANDA sendiri.
-// Dapatkan dari: Firebase Console > Project Settings > General
-// > Your apps > SDK setup and configuration > Config
-// (Rujuk SETUP_GUIDE.md langkah 1-3)
-// ============================================================
 window.firebaseConfig = {
-  apiKey: "GANTI_DENGAN_API_KEY_ANDA",
-  authDomain: "GANTI.firebaseapp.com",
-  projectId: "GANTI_PROJECT_ID",
-  storageBucket: "GANTI.appspot.com",
-  messagingSenderId: "GANTI_SENDER_ID",
-  appId: "GANTI_APP_ID"
+  apiKey: "AIzaSyBCjsse7vAYdElq1qSBwgxwq_SLj2cZVTE",
+  authDomain: "auto-services-tracker.firebaseapp.com",
+  projectId: "auto-services-tracker",
+  storageBucket: "auto-services-tracker.firebasestorage.app",
+  messagingSenderId: "56591047528",
+  appId: "1:56591047528:web:b731aa421f39550d8d54dd"
 };
