@@ -26,9 +26,9 @@ Built for personal use (originally for a Proton Persona 1.6, a Yamaha NMAX 155, 
 
 | Dashboard | Vehicle Detail | Log a Service |
 |---|---|---|
-| _Add your own screenshot here_ | _Add your own screenshot here_ | _Add your own screenshot here_ |
+| ![Dashboard](./screenshots/dashboard.png) | ![Vehicle Detail](./screenshots/vehicle-detail.png) | ![Log Service](./screenshots/log-service.png) |
 
-> Tip: take a screenshot from your phone after setup and drop it in an `screenshots/` folder, then update the table above.
+> These are sample screenshots with demo data. Swap them out with your own once you've set up your vehicles — just drop new images into `screenshots/` with the same filenames.
 
 ---
 
@@ -115,4 +115,4 @@ Released under the [MIT License](./LICENSE) — free to use, modify, and deploy 
 
 ## 🙏 Credits
 
-Built by [Safwan a.k.a Korok]([https://github.com/](https://github.com/Kengkorok)) with help from Claude. Maintenance intervals are general rule-of-thumb figures for personal reference — always double-check against your vehicle's owner manual or workshop advice for anything safety-critical (brakes, tires, etc).
+Built by [Safwan](https://github.com/) with help from Claude. Maintenance intervals are general rule-of-thumb figures for personal reference — always double-check against your vehicle's owner manual or workshop advice for anything safety-critical (brakes, tires, etc).
