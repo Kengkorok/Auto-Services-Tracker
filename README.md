@@ -15,10 +15,11 @@ Built for personal use (originally for a Proton Persona 1.6, a Yamaha NMAX 155, 
 - **Full maintenance coverage** — engine oil, coolant, spark plugs, CVT belt/set, air filter, brake fluid, battery, plus any custom item you want to add (modifications, extra parts, anything).
 - **Mileage + time based due dates** — some items are due by km, some by months, some by both. The app flags whichever comes first.
 - **Color-coded status** — instantly see what's OK (green), due soon (yellow), or overdue (red) for every vehicle.
-- **Access from anywhere** — data lives in the cloud (Firebase), not on a single device or local network. Open it from your phone, laptop, anywhere with internet.
+- **Access from anywhere, on any device** — sign in with your Google account and your data follows you across phone, laptop, tablet, anywhere with internet.
+- **Per-account data isolation** — every vehicle is scoped to your Google account (`ownerId`) and enforced by Firestore Security Rules, so if you deploy this for a group, nobody can see or edit anyone else's vehicles.
 - **Installable on iPhone & Android** — add it to your home screen and it behaves like a native app, no browser chrome, works offline for viewing.
 - **No backend server to maintain** — just static files + a free Firebase project. Hosted for free on GitHub Pages.
-- **Your data, your project** — every user deploys their own copy with their own Firebase project. Nobody shares your data.
+- **Your data, your project** — every user deploys their own copy with their own Firebase project.
 
 ---
 
@@ -36,7 +37,7 @@ Built for personal use (originally for a Proton Persona 1.6, a Yamaha NMAX 155, 
 
 - Vanilla HTML / CSS / JavaScript (no framework, no build step)
 - [Firebase Firestore](https://firebase.google.com/products/firestore) — real-time cloud database (free tier)
-- [Firebase Authentication](https://firebase.google.com/products/auth) (Anonymous sign-in) — lightweight access control
+- [Firebase Authentication](https://firebase.google.com/products/auth) (Google Sign-In) — real per-account identity, syncs across devices
 - [GitHub Pages](https://pages.github.com/) — free static hosting
 - Web App Manifest + Service Worker — installable, app-like experience on iOS & Android
 
@@ -49,13 +50,15 @@ Total cost to run: **$0**, within Firebase's free (Spark) tier for personal use.
 This project is designed so **everyone runs their own independent instance** — your maintenance data is private to you, stored in your own Firebase project.
 
 1. **Fork this repository** (top-right "Fork" button on GitHub).
-2. Follow **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** — a full step-by-step walkthrough (~15-20 minutes) covering:
+2. Follow **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** — a full step-by-step walkthrough (~20-25 minutes) covering:
    - Creating a free Firebase project
-   - Enabling Firestore + Anonymous Authentication
-   - Setting security rules so only your app can read/write your data
+   - Enabling Firestore + Google Sign-In
+   - Adding your GitHub Pages domain to Firebase's authorized domains
+   - Setting security rules so each account can only read/write its own vehicles
+   - Creating the one Firestore composite index the app needs
    - Deploying to GitHub Pages
    - Installing the app on your iPhone/Android home screen
-3. Open your new URL, register your vehicles, and start logging services.
+3. Open your new URL, sign in with Google, register your vehicles, and start logging services.
 
 No coding experience required — it's mostly clicking through Firebase Console and GitHub settings.
 
@@ -94,7 +97,6 @@ Add your new object to `VEHICLE_TYPES` and it instantly shows up in the "+ Kende
 Not built yet, but reasonable next steps if you want to extend it:
 
 - Push/email/Telegram/WhatsApp reminders when a service is due soon
-- Google Sign-In (instead of anonymous) if you want multiple people sharing one deployed instance safely, with data scoped per account
 - Service cost tracking / spending history
 - Export service history to PDF or CSV
 - Photo attachments per service log (receipts, parts)
