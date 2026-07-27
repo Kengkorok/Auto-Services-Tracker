@@ -58,7 +58,14 @@ window.signOutUser = async function () {
   await signOut(auth);
 };
 
-getRedirectResult(auth).catch((err) => setAuthError(err));
+// Kesan sebarang ralat SEMASA proses redirect balik dari Google (contoh: domain
+// tak authorized, popup/redirect diblok, dsb.) — ini akan papar mesej merah jelas
+// dan bukan terus balik senyap ke skrin log masuk.
+let redirectErrorOccurred = false;
+getRedirectResult(auth).catch((err) => {
+  redirectErrorOccurred = true;
+  setAuthError(err);
+});
 
 onAuthStateChanged(auth, (user) => {
   const signedOutView = document.getElementById("signedOutView");
@@ -76,6 +83,12 @@ onAuthStateChanged(auth, (user) => {
     vehicles = [];
     appShell.style.display = "none";
     signedOutView.style.display = "flex";
+    // Jangan biarkan "Menyambung..." terlekat selama-lamanya — kalau tiada ralat
+    // redirect, bermakna memang belum log masuk (state normal), so kosongkan status.
+    if (!redirectErrorOccurred) {
+      connStatusEl.innerHTML = "";
+      connStatusEl.className = "conn-status";
+    }
   }
 });
 
