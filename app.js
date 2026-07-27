@@ -10,46 +10,88 @@ import {
   onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, signInAnonymously, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(window.firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 const connStatusEl = document.getElementById("connStatus");
 let vehicles = []; // local cache of {id, ...data}
 let currentDetailId = null;
 let currentUid = null;
+let unsubscribeVehicles = null;
 
 // ---------- AUTH ----------
-signInAnonymously(auth).catch((err) => {
-  connStatusEl.textContent = "❌ Gagal sambung: " + err.message + " (semak firebase-config.js)";
+// Guna Google Sign-In (bukan anonymous) supaya:
+//   1) data ikut akaun Google anda — boleh akses dari MANA-MANA device (phone, laptop, dll)
+//   2) setiap orang yang guna app ni (kalau public) dapat data terasing ikut akaun masing-masing
+function setAuthLoading(msg) {
+  connStatusEl.innerHTML = msg;
+  connStatusEl.className = "conn-status";
+}
+function setAuthError(err) {
+  connStatusEl.innerHTML = "❌ Ralat: " + linkify(escapeHtml(err.message || String(err)));
   connStatusEl.className = "conn-status err";
-});
+}
+
+// Tukar sebarang URL dalam teks ralat Firebase (contoh: link "create index") jadi <a> boleh ditekan.
+function linkify(text) {
+  return text.replace(/(https?:\/\/[^\s)]+)/g, (url) => `<a href="${url}" target="_blank" rel="noopener" class="err-link">${url}</a>`);
+}
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+window.signInGoogle = function () {
+  setAuthLoading("Menyambung ke Google...");
+  signInWithRedirect(auth, googleProvider);
+};
+window.signOutUser = async function () {
+  if (unsubscribeVehicles) unsubscribeVehicles();
+  await signOut(auth);
+};
+
+getRedirectResult(auth).catch((err) => setAuthError(err));
 
 onAuthStateChanged(auth, (user) => {
+  const signedOutView = document.getElementById("signedOutView");
+  const appShell = document.getElementById("app");
   if (user) {
     currentUid = user.uid;
-    connStatusEl.textContent = "✅ Bersambung — data disegerak automatik";
+    signedOutView.style.display = "none";
+    appShell.style.display = "block";
+    document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
+    connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
     connStatusEl.className = "conn-status ok";
     listenVehicles(user.uid);
+  } else {
+    currentUid = null;
+    vehicles = [];
+    appShell.style.display = "none";
+    signedOutView.style.display = "flex";
   }
 });
 
 // ---------- FIRESTORE LISTENER ----------
-// Setiap user (anon UID) cuma nampak kenderaan dia sendiri — ditapis dengan
+// Setiap user (UID akaun Google) cuma nampak kenderaan dia sendiri — ditapis dengan
 // ownerId (bukan setakat filter client-side; firestore.rules juga enforce ini).
 function listenVehicles(uid) {
+  if (unsubscribeVehicles) unsubscribeVehicles();
   const q = query(collection(db, "vehicles"), where("ownerId", "==", uid), orderBy("createdAt", "asc"));
-  onSnapshot(q, (snap) => {
+  unsubscribeVehicles = onSnapshot(q, (snap) => {
     vehicles = [];
     snap.forEach((d) => vehicles.push({ id: d.id, ...d.data() }));
     renderVehicleList();
     if (currentDetailId) renderDetail(currentDetailId);
   }, (err) => {
-    connStatusEl.textContent = "❌ Ralat Firestore: " + err.message;
-    connStatusEl.className = "conn-status err";
+    setAuthError(err);
   });
 }
 
@@ -83,12 +125,6 @@ function showToast(msg) {
 }
 function typeDef(typeKey) {
   return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.custom;
-}
-function escapeHtml(str) {
-  if (str == null) return "";
-  return String(str).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
 }
 
 // ---------- INTERVAL OVERRIDES ----------
@@ -459,6 +495,7 @@ window.openAddVehicleModal = function () {
   document.getElementById("addVehicleModal").style.display = "flex";
 };
 window.submitAddVehicle = async function () {
+  if (!currentUid) return showToast("Sila log masuk dahulu");
   const typeKey = document.getElementById("newVehicleType").value;
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
   const mileage = Number(document.getElementById("newVehicleMileage").value || 0);
@@ -468,14 +505,18 @@ window.submitAddVehicle = async function () {
   const intervalsEl = document.getElementById("newVehicleIntervals");
   const intervals = collectIntervalsFromForm(intervalsEl, td.items);
 
-  await addDoc(collection(db, "vehicles"), {
-    ownerId: currentUid,
-    typeKey, plateNo, currentMileage: mileage,
-    serviceLog: {}, customItems: [], intervals,
-    createdAt: serverTimestamp()
-  });
-  closeModal("addVehicleModal");
-  showToast("Kenderaan didaftarkan ✅");
+  try {
+    await addDoc(collection(db, "vehicles"), {
+      ownerId: currentUid,
+      typeKey, plateNo, currentMileage: mileage,
+      serviceLog: {}, customItems: [], intervals,
+      createdAt: serverTimestamp()
+    });
+    closeModal("addVehicleModal");
+    showToast("Kenderaan didaftarkan ✅");
+  } catch (err) {
+    showToast("❌ Gagal daftar: " + err.message);
+  }
 };
 
 // Edit Interval (satu item, selepas daftar)
