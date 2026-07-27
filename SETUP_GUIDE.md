@@ -48,21 +48,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /vehicles/{vehicleId} {
-      allow read, write: if request.auth != null;
+      allow read, update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
     }
   }
 }
 ```
 
-Ini bermakna hanya sesiapa yang berjaya "sign-in" (walaupun anonymous) melalui app
-anda boleh baca/tulis data — orang random di internet yang tak buka app anda takkan
-boleh access data terus.
+Ini bermakna setiap orang yang "sign-in" (walaupun anonymous) melalui app anda
+hanya boleh baca/tulis kenderaan yang `ownerId` dia sendiri — bukan setakat orang
+random di internet takkan boleh access, tapi user lain yang buka app yang sama pun
+takkan nampak/edit kenderaan anda.
 
-> **Nota keselamatan:** Sebab guna anonymous auth (bukan login peribadi), sesiapa
-> yang tahu URL app anda dan buka ia, boleh nampak/edit data. Untuk app peribadi
-> macam ni (bukan data sensitif — cuma mileage & servis kereta), ini biasanya cukup
-> selamat selagi anda tak share URL/repo secara terbuka. Kalau nak lebih secure,
-> boleh minta saya tambah "Google Sign-In" supaya hanya email anda saja boleh masuk.
+> **Nota keselamatan:** Sebab guna anonymous auth (bukan login peribadi), setiap
+> kali browser/device "sign-in anonymous" baru (contoh: clear cache, browser lain),
+> ia dapat UID baru — jadi kenderaan lama tak akan muncul lagi (functionally macam
+> akaun baru). Untuk elak ini dan dapat proper login merentas device, boleh minta
+> saya tambah "Google Sign-In" supaya hanya email anda saja boleh masuk dan data
+> ikut akaun, bukan ikut device/browser.
 
 ## Langkah 6 — Upload ke GitHub & Deploy dengan GitHub Pages (percuma)
 

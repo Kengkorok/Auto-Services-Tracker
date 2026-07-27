@@ -7,7 +7,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, serverTimestamp, query, orderBy
+  onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, signInAnonymously, onAuthStateChanged
@@ -20,6 +20,7 @@ const auth = getAuth(app);
 const connStatusEl = document.getElementById("connStatus");
 let vehicles = []; // local cache of {id, ...data}
 let currentDetailId = null;
+let currentUid = null;
 
 // ---------- AUTH ----------
 signInAnonymously(auth).catch((err) => {
@@ -29,15 +30,18 @@ signInAnonymously(auth).catch((err) => {
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
+    currentUid = user.uid;
     connStatusEl.textContent = "✅ Bersambung — data disegerak automatik";
     connStatusEl.className = "conn-status ok";
-    listenVehicles();
+    listenVehicles(user.uid);
   }
 });
 
 // ---------- FIRESTORE LISTENER ----------
-function listenVehicles() {
-  const q = query(collection(db, "vehicles"), orderBy("createdAt", "asc"));
+// Setiap user (anon UID) cuma nampak kenderaan dia sendiri — ditapis dengan
+// ownerId (bukan setakat filter client-side; firestore.rules juga enforce ini).
+function listenVehicles(uid) {
+  const q = query(collection(db, "vehicles"), where("ownerId", "==", uid), orderBy("createdAt", "asc"));
   onSnapshot(q, (snap) => {
     vehicles = [];
     snap.forEach((d) => vehicles.push({ id: d.id, ...d.data() }));
@@ -79,6 +83,12 @@ function showToast(msg) {
 }
 function typeDef(typeKey) {
   return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.custom;
+}
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
 }
 
 // ---------- INTERVAL OVERRIDES ----------
@@ -296,7 +306,7 @@ function renderVehicleList() {
       <div class="vehicle-card-top">
         <div>
           <div class="vehicle-title">${td.icon} ${td.label}</div>
-          <div class="vehicle-plate">${v.plateNo || "-"}</div>
+          <div class="vehicle-plate">${escapeHtml(v.plateNo) || "-"}</div>
         </div>
         <span class="status-badge ${badgeClass}">${badgeLabel}</span>
       </div>
@@ -342,7 +352,7 @@ function renderDetail(id) {
     <div class="detail-header">
       <div>
         <h2>${td.icon} ${td.label}</h2>
-        <div class="vehicle-plate">${v.plateNo || "-"}</div>
+        <div class="vehicle-plate">${escapeHtml(v.plateNo) || "-"}</div>
       </div>
       <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">Kemaskini Mileage</button>
     </div>
@@ -382,7 +392,7 @@ function renderItemCard(vehicle, key, def, s, log) {
     if (s.nextDueKm != null) metaLines.push(`Next servis (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> (${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})`);
     if (s.nextDueDate != null) metaLines.push(`Next servis (tarikh): <strong>${fmtDate(s.nextDueDate)}</strong> (${s.remainingDays >= 0 ? "baki " + s.remainingDays + " hari" : "lebih " + Math.abs(s.remainingDays) + " hari"})`);
     if (s.oilType && def.oilTypes) metaLines.push(`Jenis minyak digunakan: ${def.oilTypes[s.oilType].label}`);
-    if (log?.lastNote) metaLines.push(`Nota: ${log.lastNote}`);
+    if (log?.lastNote) metaLines.push(`Nota: ${escapeHtml(log.lastNote)}`);
   }
   metaLines.push(`Interval semasa: ${intervalSummaryText(def, eff)}`);
   if (def.note) metaLines.push(`<em>${def.note}</em>`);
@@ -413,7 +423,7 @@ function renderCustomItemCard(vehicleId, item, s) {
   return `
     <div class="item-card ${s.status}">
       <div class="item-top">
-        <span class="item-label">${item.label}</span>
+        <span class="item-label">${escapeHtml(item.label)}</span>
         <span class="status-badge status-${s.status}">${s.statusLabel}</span>
       </div>
       <div class="item-meta">${metaLines.join("<br>")}</div>
@@ -459,6 +469,7 @@ window.submitAddVehicle = async function () {
   const intervals = collectIntervalsFromForm(intervalsEl, td.items);
 
   await addDoc(collection(db, "vehicles"), {
+    ownerId: currentUid,
     typeKey, plateNo, currentMileage: mileage,
     serviceLog: {}, customItems: [], intervals,
     createdAt: serverTimestamp()
