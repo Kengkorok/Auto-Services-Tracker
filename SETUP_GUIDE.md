@@ -3,7 +3,7 @@
 App ni percuma sepenuhnya, disimpan di cloud (bukan wifi rumah anda), dan boleh
 diakses dari mana-mana saja — Android, iPhone, laptop, semua boleh guna URL yang sama.
 
-Ambil masa lebih kurang 15-20 minit untuk setup kali pertama. Selepas itu, guna je macam app biasa.
+Ambil masa lebih kurang 20-25 minit untuk setup kali pertama. Selepas itu, guna je macam app biasa.
 
 ---
 
@@ -30,13 +30,22 @@ Ambil masa lebih kurang 15-20 minit untuk setup kali pertama. Selepas itu, guna 
 2. Pilih lokasi server contoh `asia-southeast1 (Singapore)` (paling dekat dengan Malaysia) → **Next**.
 3. Pilih **"Start in production mode"** → **Enable**.
 
-## Langkah 4 — Aktifkan Anonymous Authentication
+## Langkah 4 — Aktifkan Google Sign-In
 
-App ni guna "Anonymous sign-in" supaya senang (tak perlu buat akaun/password), tapi
-data tetap dilindungi oleh security rules supaya orang luar tak boleh access.
+App ni guna **Google Sign-In** (bukan anonymous) — supaya data anda ikut akaun
+Google anda dan boleh diakses dari **mana-mana device** (phone, laptop, tablet),
+bukan terikat kepada satu browser/device sahaja.
 
-1. Firebase Console → **Build → Authentication** → klik **Get started**.
-2. Tab **Sign-in method** → pilih **Anonymous** → **Enable** → **Save**.
+1. Firebase Console → **Build → Authentication** → klik **Get started** (kalau
+   baru pertama kali) atau terus ke tab **Sign-in method**.
+2. Klik **Google** dalam senarai providers → **Enable** → pilih email support anda
+   → **Save**.
+3. Masih dalam **Authentication**, klik tab **Settings → Authorized domains**.
+   Klik **Add domain** dan masukkan domain GitHub Pages anda, contoh:
+   `USERNAME.github.io` (tanpa `https://`, tanpa slash di belakang).
+   **Langkah ni penting** — tanpa domain ni disenaraikan, Google Sign-In akan
+   gagal/error bila app dibuka dari URL GitHub Pages anda (walaupun ia jalan elok
+   di `localhost`).
 
 ## Langkah 5 — Set Firestore Security Rules
 
@@ -57,19 +66,39 @@ service cloud.firestore {
 }
 ```
 
-Ini bermakna setiap orang yang "sign-in" (walaupun anonymous) melalui app anda
-hanya boleh baca/tulis kenderaan yang `ownerId` dia sendiri — bukan setakat orang
-random di internet takkan boleh access, tapi user lain yang buka app yang sama pun
-takkan nampak/edit kenderaan anda.
+Ini bermakna setiap orang yang log masuk dengan akaun Google melalui app anda
+hanya boleh baca/tulis kenderaan yang `ownerId` dia sendiri — orang lain yang
+guna app yang sama (kalau anda buat public) takkan nampak/edit kenderaan anda,
+dan sebaliknya. Sebab guna akaun Google sebenar (bukan anonymous), UID anda
+kekal sama tak kira anda buka dari phone, laptop, atau device lain — data anda
+akan sentiasa sync merentas semua device anda.
 
-> **Nota keselamatan:** Sebab guna anonymous auth (bukan login peribadi), setiap
-> kali browser/device "sign-in anonymous" baru (contoh: clear cache, browser lain),
-> ia dapat UID baru — jadi kenderaan lama tak akan muncul lagi (functionally macam
-> akaun baru). Untuk elak ini dan dapat proper login merentas device, boleh minta
-> saya tambah "Google Sign-In" supaya hanya email anda saja boleh masuk dan data
-> ikut akaun, bukan ikut device/browser.
+## Langkah 6 — Buat Firestore Composite Index (PENTING — jangan skip)
 
-## Langkah 6 — Upload ke GitHub & Deploy dengan GitHub Pages (percuma)
+App ni query kenderaan dengan **dua** syarat serentak — tapis ikut `ownerId`
+DAN susun ikut `createdAt`. Firestore **tidak** buat index untuk kombinasi macam
+ni secara automatik — anda kena buat index "composite" sekali sahaja secara
+manual, atau app anda akan tersekat dengan mesej ralat lepas log masuk.
+
+Cara termudah:
+1. Selepas anda siapkan Langkah 1-5 dan buka app anda buat kali pertama serta
+   log masuk dengan Google, **jangan risau** kalau anda nampak mesej ralat merah
+   kat atas skrin — ia akan mengandungi **link biru boleh ditekan** terus ke
+   Firebase Console untuk create index tu automatik.
+2. Tekan link tu → ia akan buka Firebase Console dengan butang **Create Index**
+   dah pun terisi automatik → tekan **Create Index**.
+3. Tunggu 1-2 minit (Firebase akan build index tu di belakang tabir) → refresh
+   app anda → sepatutnya dah okay dan senarai kenderaan muncul.
+
+Kalau nak buat secara manual (tanpa tunggu error dulu):
+1. Firebase Console → **Firestore Database → Indexes** tab → **Composite** →
+   **Create Index**.
+2. Collection ID: `vehicles`.
+3. Tambah 2 fields: `ownerId` (Ascending), `createdAt` (Ascending).
+4. Query scope: **Collection** → **Create Index**.
+5. Tunggu status jadi "Enabled" (biasanya 1-2 minit untuk data kecil).
+
+## Langkah 7 — Upload ke GitHub & Deploy dengan GitHub Pages (percuma)
 
 1. Pergi ke https://github.com dan log masuk (atau daftar akaun percuma kalau belum ada).
 2. Klik **+ → New repository**. Nama contoh `servis-tracker`. Pilih **Private** (disyorkan,
@@ -97,13 +126,17 @@ takkan nampak/edit kenderaan anda.
    **Itulah URL app anda** — boleh buka dari phone, laptop, mana-mana saja, guna
    internet/data mobile pun boleh, bukan setakat wifi rumah.
 
+   > Ingat balik ke **Langkah 4.3** — pastikan domain `USERNAME.github.io` ni
+   > (ganti USERNAME dengan username GitHub sebenar anda) dah ditambah dalam
+   > Authorized Domains Firebase, kalau tak Google Sign-In akan gagal di sini.
+
 > Kalau repo anda **Private**, GitHub Pages private repo perlukan pelan GitHub Pro
 > (repo private + Pages percuma cuma untuk akaun Pro/Team). Kalau nak kekal 100%
 > percuma, set repo jadi **Public** — firebase-config.js yang terdedah tu selamat
 > je sebab akses sebenar dikawal oleh Firestore Security Rules (Langkah 5), bukan
 > oleh "rahsia" API key tu.
 
-## Langkah 7 — Install sebagai App di Phone
+## Langkah 8 — Install sebagai App di Phone
 
 **Android (Chrome):**
 1. Buka URL app tadi dalam Chrome.
@@ -116,28 +149,36 @@ takkan nampak/edit kenderaan anda.
 
 Lepas ni, ada icon app di home screen anda macam app biasa — buka terus tanpa browser bar.
 
-## Langkah 8 — Mula Guna
+## Langkah 9 — Mula Guna
 
-1. Buka app → tap **+ Kenderaan** → daftar 3 kenderaan anda:
-   - Proton Persona 1.6 (no plate anda)
-   - Yamaha NMAX 155 V3 (no plate anda)
-   - Yamaha Lagenda 115 FI (no plate anda)
-2. Masukkan mileage semasa untuk setiap satu.
-3. Untuk setiap item (Minyak Enjin, Coolant, dsb.) — kalau anda ingat bila kali
+1. Buka app → tap **Sign in with Google** → pilih akaun Google anda.
+2. Tap **+ Kenderaan** → daftar kenderaan anda (Proton Persona 1.6, Yamaha NMAX 155
+   V3, Yamaha Lagenda 115 FI, atau kenderaan custom).
+3. Masukkan mileage semasa untuk setiap satu, dan ubah interval servis kalau perlu
+   ikut kenderaan anda sendiri.
+4. Untuk setiap item (Minyak Enjin, Coolant, dsb.) — kalau anda ingat bila kali
    terakhir servis & pada mileage berapa, tap **Log Servis** dan masukkan maklumat
    tu supaya app boleh calculate next servis dengan betul dari sekarang.
-4. Lepas ni, setiap kali servis — tap **Log Servis** pada item berkenaan, pilih
+5. Lepas ni, setiap kali servis — tap **Log Servis** pada item berkenaan, pilih
    jenis minyak (semi/fully) kalau applicable, masukkan mileage & tarikh — app
    auto-calculate next due.
+6. Log masuk dengan akaun Google yang sama di device lain (phone, laptop) — semua
+   kenderaan dan rekod servis anda akan terus muncul, disegerak automatik.
 
 ---
 
 ### Jika Ada Masalah
 
-- **"Menyambung..." tak berubah / ralat merah** → semak semula `firebase-config.js`,
-  pastikan semua nilai betul (bukan "GANTI_...").
-- **Data tak muncul di phone lain** → pastikan anda buka URL yang sama
-  (https://USERNAME.github.io/servis-tracker/), bukan buka fail index.html terus
-  dari phone (sebab tu akan cari fail lokal, bukan URL online).
-- Nak saya tambah ciri lain (contoh: reminder WhatsApp/Telegram bila due, atau
-  Google Sign-In untuk extra security) — bagitahu saya, boleh saya sambung.
+- **"Menyambung..." tak berubah / ralat merah lepas log masuk** → biasanya sebab
+  Firestore Composite Index belum dibuat (Langkah 6) — cari link biru dalam mesej
+  ralat tu dan tekan untuk create index, ATAU sebab `firebase-config.js` masih ada
+  nilai "GANTI_...".
+- **"Google Sign-In gagal" / "unauthorized domain" / redirect balik ke skrin log masuk semula** →
+  semak semula Langkah 4.3 — domain GitHub Pages anda kena disenaraikan dalam
+  Firebase Authorized Domains.
+- **Data tak muncul di phone lain** → pastikan anda log masuk dengan **akaun
+  Google yang sama** di kedua-dua device, dan buka URL yang sama
+  (https://USERNAME.github.io/servis-tracker/) — bukan buka fail index.html terus
+  dari phone.
+- Nak saya tambah ciri lain (contoh: reminder WhatsApp/Telegram bila due) —
+  bagitahu saya, boleh saya sambung.
