@@ -10,7 +10,7 @@ import {
   onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  getAuth, GoogleAuthProvider, signInWithPopup,
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -52,10 +52,9 @@ function escapeHtml(str) {
 }
 
 window.signInGoogle = function () {
-  console.log("[ServisTracker] signInGoogle() dipanggil — mula signInWithRedirect...");
-  setAuthLoading("Menyambung ke Google...");
-  signInWithRedirect(auth, googleProvider).catch((err) => {
-    console.error("[ServisTracker] signInWithRedirect gagal SEBELUM navigate:", err);
+  console.log("[ServisTracker] signInGoogle() dipanggil — mula signInWithPopup...");
+  signInWithPopup(auth, googleProvider).catch((err) => {
+    console.error("[ServisTracker] signInWithPopup gagal:", err);
     setAuthError(err);
   });
 };
@@ -66,20 +65,8 @@ window.signOutUser = async function () {
   await signOut(auth);
 };
 
-// Kesan sebarang ralat SEMASA proses redirect balik dari Google (contoh: domain
-// tak authorized, popup/redirect diblok, dsb.) — ini akan papar mesej merah jelas
-// dan bukan terus balik senyap ke skrin log masuk.
-console.log("[ServisTracker] Semak getRedirectResult() semasa page load...");
+// Tiada redirect — popup akan tunjuk error sendiri kalau gagal.
 let redirectErrorOccurred = false;
-getRedirectResult(auth)
-  .then((result) => {
-    console.log("[ServisTracker] getRedirectResult() selesai. Ada user?", !!result?.user, result);
-  })
-  .catch((err) => {
-    console.error("[ServisTracker] getRedirectResult() gagal:", err.code, err.message, err);
-    redirectErrorOccurred = true;
-    setAuthError(err);
-  });
 
 onAuthStateChanged(auth, (user) => {
   console.log("[ServisTracker] onAuthStateChanged fired. user:", user ? user.uid : null);
