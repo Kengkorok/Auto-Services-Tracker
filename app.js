@@ -11,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut
+  onAuthStateChanged, signOut, browserLocalPersistence, setPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(window.firebaseConfig);
@@ -72,6 +72,10 @@ let redirectErrorOccurred = false;
 
 (async function initAuth() {
   try {
+    // Guna localStorage (bukan sessionStorage default) — sessionStorage hilang
+    // lepas cross-origin redirect (app → Google → balik), causing login loop.
+    await setPersistence(auth, browserLocalPersistence);
+
     // Tunggu redirect result dulu — consume OAuth token dari URL jika ada
     await getRedirectResult(auth);
   } catch (err) {
