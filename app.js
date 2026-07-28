@@ -10,9 +10,8 @@ import {
   onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut, signInWithPopup,
-  browserLocalPersistence, setPersistence
+  getAuth, GoogleAuthProvider, signInWithPopup,
+  onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(window.firebaseConfig);
@@ -26,20 +25,10 @@ let currentDetailId = null;
 let currentUid = null;
 let unsubscribeVehicles = null;
 
-// ---------- AUTH ----------
-// Guna Google Sign-In (bukan anonymous) supaya:
-//   1) data ikut akaun Google anda — boleh akses dari MANA-MANA device (phone, laptop, dll)
-//   2) setiap orang yang guna app ni (kalau public) dapat data terasing ikut akaun masing-masing
-function setAuthLoading(msg) {
-  connStatusEl.innerHTML = msg;
-  connStatusEl.className = "conn-status";
-}
-function setAuthError(err) {
-  connStatusEl.innerHTML = "❌ Ralat: " + linkify(escapeHtml(err.message || String(err)));
-  connStatusEl.className = "conn-status err";
-}
-
-// Tukar sebarang URL dalam teks ralat Firebase (contoh: link "create index") jadi <a> boleh ditekan.
+// ===== AUTH =====
+// Guna signInWithPopup (bukan redirect) — lebih reliable, takde cross-origin
+// sessionStorage wipe, takde redirect back-and-forth. Popup buka → user auth →
+// popup tutup → terus login. Simple.
 function linkify(text) {
   return text.replace(/(https?:\/\/[^\s)]+)/g, (url) => `<a href="${url}" target="_blank" rel="noopener" class="err-link">${url}</a>`);
 }
@@ -49,89 +38,57 @@ function escapeHtml(str) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
 }
+function setAuthStatus(msg, cls) {
+  connStatusEl.innerHTML = msg;
+  connStatusEl.className = "conn-status" + (cls ? " " + cls : "");
+}
 
 let signInInProgress = false;
 window.signInGoogle = async function () {
-  if (signInInProgress) return; // elak double-click → multiple redirects
+  if (signInInProgress) return;
   signInInProgress = true;
-  setAuthLoading("Menyambung ke Google...");
+  setAuthStatus("Menyambung ke Google...");
 
   try {
-    // Cuba popup dulu — lebih reliable (tak kena cross-origin sessionStorage wipe).
-    // signInWithPopup resolve terus dengan credential, tak perlu redirect balik.
     await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged akan fire automatik selepas popup tutup
+    // onAuthStateChanged akan fire automatik — tak perlu buat apa-apa
     signInInProgress = false;
-  } catch (popupErr) {
-    // Popup mungkin diblok (mobile / PWA / browser privacy settings).
-    // Fallback ke redirect — redirect akan reload page, so jangan reset
-    // signInInProgress (nanti page baru load, variable reset sendiri).
-    if (popupErr.code === "auth/popup-blocked" ||
-        popupErr.code === "auth/popup-closed-by-user" ||
-        popupErr.code === "auth/cancelled-popup-request") {
-      signInWithRedirect(auth, googleProvider);
-      // Jangan reset signInInProgress — redirect akan refresh page
-      return;
+  } catch (err) {
+    signInInProgress = false;
+    if (err.code === "auth/popup-closed-by-user") {
+      setAuthStatus(""); // user tutup popup — reset je
+    } else {
+      setAuthStatus("❌ Ralat: " + linkify(escapeHtml(err.message || String(err))), "err");
     }
-    // Error lain (network, config, etc.) — papar & reset
-    signInInProgress = false;
-    setAuthError(popupErr);
   }
 };
+
 window.signOutUser = async function () {
-  if (unsubscribeVehicles) unsubscribeVehicles();
+  if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
   await signOut(auth);
 };
 
-// ===== AUTH INIT =====
-// PENTING: getRedirectResult MESTI selesai SEBELUM onAuthStateChanged didaftar.
-// Kalau tidak, onAuthStateChanged akan fire dgn user=null dulu → papar skrin
-// log masuk → user klik sign-in lagi → redirect lagi → LOOP ∞.
-//
-// Firestore listener (listenVehicles) juga hanya didaftar SELEPAS user confirmed.
-// Ini elak query Firestore dengan user null (yang akan trigger ralat permission).
-let redirectErrorOccurred = false;
-
-(async function initAuth() {
-  try {
-    // Guna localStorage (bukan sessionStorage default) — sessionStorage hilang
-    // lepas cross-origin redirect (app → Google → balik), causing login loop.
-    await setPersistence(auth, browserLocalPersistence);
-
-    // Tunggu redirect result dulu — consume OAuth token dari URL jika ada
-    await getRedirectResult(auth);
-  } catch (err) {
-    redirectErrorOccurred = true;
-    setAuthError(err);
+// Auth state listener — daftar terus, tak perlu getRedirectResult atau setPersistence.
+// signInWithPopup tak perlukan semua tu.
+onAuthStateChanged(auth, (user) => {
+  const signedOutView = document.getElementById("signedOutView");
+  const appShell = document.getElementById("app");
+  if (user) {
+    currentUid = user.uid;
+    signedOutView.style.display = "none";
+    appShell.style.display = "block";
+    document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
+    setAuthStatus("✅ Bersambung — data disegerak automatik", "ok");
+    listenVehicles(user.uid);
+  } else {
+    currentUid = null;
+    vehicles = [];
+    if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
+    appShell.style.display = "none";
+    signedOutView.style.display = "flex";
+    setAuthStatus("");
   }
-
-  // Baru daftar auth state listener — sekarang state dah betul
-  onAuthStateChanged(auth, (user) => {
-    const signedOutView = document.getElementById("signedOutView");
-    const appShell = document.getElementById("app");
-    if (user) {
-      currentUid = user.uid;
-      signedOutView.style.display = "none";
-      appShell.style.display = "block";
-      document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
-      connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
-      connStatusEl.className = "conn-status ok";
-      listenVehicles(user.uid);
-    } else {
-      currentUid = null;
-      vehicles = [];
-      if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
-      appShell.style.display = "none";
-      signedOutView.style.display = "flex";
-      // Jangan biarkan "Menyambung..." terlekat — kalau tiada ralat redirect,
-      // bermakna memang belum log masuk (state normal), so kosongkan status.
-      if (!redirectErrorOccurred) {
-        connStatusEl.innerHTML = "";
-        connStatusEl.className = "conn-status";
-      }
-    }
-  });
-})();
+});
 
 // ---------- FIRESTORE LISTENER ----------
 // Setiap user (UID akaun Google) cuma nampak kenderaan dia sendiri — ditapis dengan
