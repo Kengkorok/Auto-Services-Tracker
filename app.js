@@ -49,7 +49,10 @@ function escapeHtml(str) {
   }[c]));
 }
 
+let signInInProgress = false;
 window.signInGoogle = function () {
+  if (signInInProgress) return; // elak double-click → multiple redirects
+  signInInProgress = true;
   setAuthLoading("Menyambung ke Google...");
   signInWithRedirect(auth, googleProvider);
 };
@@ -58,39 +61,51 @@ window.signOutUser = async function () {
   await signOut(auth);
 };
 
-// Kesan sebarang ralat SEMASA proses redirect balik dari Google (contoh: domain
-// tak authorized, popup/redirect diblok, dsb.) — ini akan papar mesej merah jelas
-// dan bukan terus balik senyap ke skrin log masuk.
+// ===== AUTH INIT =====
+// PENTING: getRedirectResult MESTI selesai SEBELUM onAuthStateChanged didaftar.
+// Kalau tidak, onAuthStateChanged akan fire dgn user=null dulu → papar skrin
+// log masuk → user klik sign-in lagi → redirect lagi → LOOP ∞.
+//
+// Firestore listener (listenVehicles) juga hanya didaftar SELEPAS user confirmed.
+// Ini elak query Firestore dengan user null (yang akan trigger ralat permission).
 let redirectErrorOccurred = false;
-getRedirectResult(auth).catch((err) => {
-  redirectErrorOccurred = true;
-  setAuthError(err);
-});
 
-onAuthStateChanged(auth, (user) => {
-  const signedOutView = document.getElementById("signedOutView");
-  const appShell = document.getElementById("app");
-  if (user) {
-    currentUid = user.uid;
-    signedOutView.style.display = "none";
-    appShell.style.display = "block";
-    document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
-    connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
-    connStatusEl.className = "conn-status ok";
-    listenVehicles(user.uid);
-  } else {
-    currentUid = null;
-    vehicles = [];
-    appShell.style.display = "none";
-    signedOutView.style.display = "flex";
-    // Jangan biarkan "Menyambung..." terlekat selama-lamanya — kalau tiada ralat
-    // redirect, bermakna memang belum log masuk (state normal), so kosongkan status.
-    if (!redirectErrorOccurred) {
-      connStatusEl.innerHTML = "";
-      connStatusEl.className = "conn-status";
-    }
+(async function initAuth() {
+  try {
+    // Tunggu redirect result dulu — consume OAuth token dari URL jika ada
+    await getRedirectResult(auth);
+  } catch (err) {
+    redirectErrorOccurred = true;
+    setAuthError(err);
   }
-});
+
+  // Baru daftar auth state listener — sekarang state dah betul
+  onAuthStateChanged(auth, (user) => {
+    const signedOutView = document.getElementById("signedOutView");
+    const appShell = document.getElementById("app");
+    if (user) {
+      currentUid = user.uid;
+      signedOutView.style.display = "none";
+      appShell.style.display = "block";
+      document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
+      connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
+      connStatusEl.className = "conn-status ok";
+      listenVehicles(user.uid);
+    } else {
+      currentUid = null;
+      vehicles = [];
+      if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
+      appShell.style.display = "none";
+      signedOutView.style.display = "flex";
+      // Jangan biarkan "Menyambung..." terlekat — kalau tiada ralat redirect,
+      // bermakna memang belum log masuk (state normal), so kosongkan status.
+      if (!redirectErrorOccurred) {
+        connStatusEl.innerHTML = "";
+        connStatusEl.className = "conn-status";
+      }
+    }
+  });
+})();
 
 // ---------- FIRESTORE LISTENER ----------
 // Setiap user (UID akaun Google) cuma nampak kenderaan dia sendiri — ditapis dengan
