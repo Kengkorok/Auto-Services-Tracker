@@ -11,7 +11,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut, browserLocalPersistence, setPersistence
+  onAuthStateChanged, signOut, signInWithPopup,
+  browserLocalPersistence, setPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(window.firebaseConfig);
@@ -50,11 +51,32 @@ function escapeHtml(str) {
 }
 
 let signInInProgress = false;
-window.signInGoogle = function () {
+window.signInGoogle = async function () {
   if (signInInProgress) return; // elak double-click → multiple redirects
   signInInProgress = true;
   setAuthLoading("Menyambung ke Google...");
-  signInWithRedirect(auth, googleProvider);
+
+  try {
+    // Cuba popup dulu — lebih reliable (tak kena cross-origin sessionStorage wipe).
+    // signInWithPopup resolve terus dengan credential, tak perlu redirect balik.
+    await signInWithPopup(auth, googleProvider);
+    // onAuthStateChanged akan fire automatik selepas popup tutup
+    signInInProgress = false;
+  } catch (popupErr) {
+    // Popup mungkin diblok (mobile / PWA / browser privacy settings).
+    // Fallback ke redirect — redirect akan reload page, so jangan reset
+    // signInInProgress (nanti page baru load, variable reset sendiri).
+    if (popupErr.code === "auth/popup-blocked" ||
+        popupErr.code === "auth/popup-closed-by-user" ||
+        popupErr.code === "auth/cancelled-popup-request") {
+      signInWithRedirect(auth, googleProvider);
+      // Jangan reset signInInProgress — redirect akan refresh page
+      return;
+    }
+    // Error lain (network, config, etc.) — papar & reset
+    signInInProgress = false;
+    setAuthError(popupErr);
+  }
 };
 window.signOutUser = async function () {
   if (unsubscribeVehicles) unsubscribeVehicles();
