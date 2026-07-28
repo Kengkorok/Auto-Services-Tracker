@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Servis Tracker">
@@ -43,6 +44,14 @@
   </header>
 
   <main id="mainView" class="main">
+    <div id="licenseCard" class="license-card" onclick="openLicenseModal()">
+      <div class="license-card-top">
+        <span class="license-card-title">🪪 Lesen Memandu</span>
+        <span id="licenseStatusBadge" class="status-badge status-na">Belum Diisi</span>
+      </div>
+      <div id="licenseCardBody" class="license-card-body">Tap untuk tambah kelas lesen anda (pilihan)</div>
+    </div>
+
     <div id="vehicleList" class="vehicle-list"></div>
     <div id="emptyState" class="empty-state" style="display:none;">
       <p>Belum ada kenderaan didaftarkan.</p>
@@ -64,10 +73,25 @@
     <h3>Daftar Kenderaan</h3>
     <label>Jenis Kenderaan</label>
     <select id="newVehicleType"></select>
-    <label>No. Pendaftaran (Plate)</label>
+
+    <label>Nama Kenderaan (pilihan)</label>
+    <input id="newVehicleName" type="text" placeholder="cth: Kereta buruk Kancil, Kereta sewa Lamborghini flex">
+
+    <label>No. Pendaftaran / Label (pilihan)</label>
     <input id="newVehiclePlate" type="text" placeholder="Contoh: WXX 1234">
+
     <label>Mileage Semasa (km)</label>
     <input id="newVehicleMileage" type="number" inputmode="numeric" placeholder="Contoh: 7000">
+
+    <label>Tarikh Luput Roadtax (pilihan)</label>
+    <input id="newVehicleRoadtax" type="date">
+
+    <label>Gambar Kenderaan (pilihan)</label>
+    <input id="newVehiclePhotoInput" type="file" accept="image/*">
+    <div id="newVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
+      <img id="newVehiclePhotoPreview" class="photo-preview" alt="Preview">
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearNewVehiclePhoto()">Buang Gambar</button>
+    </div>
 
     <div class="section-title" style="margin-top:20px;">Interval Servis (boleh ubah ikut kenderaan anda)</div>
     <div id="newVehicleIntervals" class="interval-form"></div>
@@ -75,6 +99,43 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('addVehicleModal')">Batal</button>
       <button class="btn btn-primary" onclick="submitAddVehicle()">Daftar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Kenderaan (nama/plate/gambar/roadtax selepas daftar) -->
+<div id="editVehicleModal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Edit Kenderaan</h3>
+    <label>Nama Kenderaan (pilihan)</label>
+    <input id="editVehicleName" type="text" placeholder="cth: Kereta buruk Kancil">
+    <label>No. Pendaftaran / Label (pilihan)</label>
+    <input id="editVehiclePlate" type="text">
+    <label>Tarikh Luput Roadtax (pilihan)</label>
+    <input id="editVehicleRoadtax" type="date">
+    <label>Gambar Kenderaan (pilihan)</label>
+    <input id="editVehiclePhotoInput" type="file" accept="image/*">
+    <div id="editVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
+      <img id="editVehiclePhotoPreview" class="photo-preview" alt="Preview">
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearEditVehiclePhoto()">Buang Gambar</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('editVehicleModal')">Batal</button>
+      <button class="btn btn-primary" onclick="submitEditVehicle()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Lesen Memandu -->
+<div id="licenseModal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>🪪 Lesen Memandu</h3>
+    <p class="danger-text" style="color:var(--text-dim);">Pilihan sahaja — tak menjejaskan tracking servis kenderaan anda. Tiada notifikasi automatik, ini sekadar rujukan visual.</p>
+    <div id="licenseClassRows" class="interval-form"></div>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()">+ Tambah Kelas</button>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('licenseModal')">Batal</button>
+      <button class="btn btn-primary" onclick="submitLicense()">Simpan</button>
     </div>
   </div>
 </div>

@@ -6,11 +6,11 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
   onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -24,11 +24,23 @@ let vehicles = []; // local cache of {id, ...data}
 let currentDetailId = null;
 let currentUid = null;
 let unsubscribeVehicles = null;
+let unsubscribeLicense = null;
+let licenseDoc = { classes: [] };
 
-// ===== AUTH =====
-// Guna signInWithPopup (bukan redirect) — lebih reliable, takde cross-origin
-// sessionStorage wipe, takde redirect back-and-forth. Popup buka → user auth →
-// popup tutup → terus login. Simple.
+// ---------- AUTH ----------
+// Guna Google Sign-In (bukan anonymous) supaya:
+//   1) data ikut akaun Google anda — boleh akses dari MANA-MANA device (phone, laptop, dll)
+//   2) setiap orang yang guna app ni (kalau public) dapat data terasing ikut akaun masing-masing
+function setAuthLoading(msg) {
+  connStatusEl.innerHTML = msg;
+  connStatusEl.className = "conn-status";
+}
+function setAuthError(err) {
+  connStatusEl.innerHTML = "❌ Ralat: " + linkify(escapeHtml(err.message || String(err)));
+  connStatusEl.className = "conn-status err";
+}
+
+// Tukar sebarang URL dalam teks ralat Firebase (contoh: link "create index") jadi <a> boleh ditekan.
 function linkify(text) {
   return text.replace(/(https?:\/\/[^\s)]+)/g, (url) => `<a href="${url}" target="_blank" rel="noopener" class="err-link">${url}</a>`);
 }
@@ -38,39 +50,39 @@ function escapeHtml(str) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
 }
-function setAuthStatus(msg, cls) {
-  connStatusEl.innerHTML = msg;
-  connStatusEl.className = "conn-status" + (cls ? " " + cls : "");
-}
 
-let signInInProgress = false;
-window.signInGoogle = async function () {
-  if (signInInProgress) return;
-  signInInProgress = true;
-  setAuthStatus("Menyambung ke Google...");
-
-  try {
-    await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged akan fire automatik — tak perlu buat apa-apa
-    signInInProgress = false;
-  } catch (err) {
-    signInInProgress = false;
-    if (err.code === "auth/popup-closed-by-user") {
-      setAuthStatus(""); // user tutup popup — reset je
-    } else {
-      setAuthStatus("❌ Ralat: " + linkify(escapeHtml(err.message || String(err))), "err");
-    }
-  }
+window.signInGoogle = function () {
+  console.log("[ServisTracker] signInGoogle() dipanggil — mula signInWithRedirect...");
+  setAuthLoading("Menyambung ke Google...");
+  signInWithRedirect(auth, googleProvider).catch((err) => {
+    console.error("[ServisTracker] signInWithRedirect gagal SEBELUM navigate:", err);
+    setAuthError(err);
+  });
 };
-
 window.signOutUser = async function () {
-  if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
+  if (unsubscribeVehicles) unsubscribeVehicles();
+  if (unsubscribeLicense) unsubscribeLicense();
+  licenseDoc = { classes: [] };
   await signOut(auth);
 };
 
-// Auth state listener — daftar terus, tak perlu getRedirectResult atau setPersistence.
-// signInWithPopup tak perlukan semua tu.
+// Kesan sebarang ralat SEMASA proses redirect balik dari Google (contoh: domain
+// tak authorized, popup/redirect diblok, dsb.) — ini akan papar mesej merah jelas
+// dan bukan terus balik senyap ke skrin log masuk.
+console.log("[ServisTracker] Semak getRedirectResult() semasa page load...");
+let redirectErrorOccurred = false;
+getRedirectResult(auth)
+  .then((result) => {
+    console.log("[ServisTracker] getRedirectResult() selesai. Ada user?", !!result?.user, result);
+  })
+  .catch((err) => {
+    console.error("[ServisTracker] getRedirectResult() gagal:", err.code, err.message, err);
+    redirectErrorOccurred = true;
+    setAuthError(err);
+  });
+
 onAuthStateChanged(auth, (user) => {
+  console.log("[ServisTracker] onAuthStateChanged fired. user:", user ? user.uid : null);
   const signedOutView = document.getElementById("signedOutView");
   const appShell = document.getElementById("app");
   if (user) {
@@ -78,15 +90,21 @@ onAuthStateChanged(auth, (user) => {
     signedOutView.style.display = "none";
     appShell.style.display = "block";
     document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
-    setAuthStatus("✅ Bersambung — data disegerak automatik", "ok");
+    connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
+    connStatusEl.className = "conn-status ok";
     listenVehicles(user.uid);
+    listenLicense(user.uid);
   } else {
     currentUid = null;
     vehicles = [];
-    if (unsubscribeVehicles) { unsubscribeVehicles(); unsubscribeVehicles = null; }
     appShell.style.display = "none";
     signedOutView.style.display = "flex";
-    setAuthStatus("");
+    // Jangan biarkan "Menyambung..." terlekat selama-lamanya — kalau tiada ralat
+    // redirect, bermakna memang belum log masuk (state normal), so kosongkan status.
+    if (!redirectErrorOccurred) {
+      connStatusEl.innerHTML = "";
+      connStatusEl.className = "conn-status";
+    }
   }
 });
 
@@ -103,6 +121,18 @@ function listenVehicles(uid) {
     if (currentDetailId) renderDetail(currentDetailId);
   }, (err) => {
     setAuthError(err);
+  });
+}
+
+// Lesen memandu — satu dokumen sahaja per akaun (ID dokumen = uid), berasingan
+// daripada kenderaan sebab lesen melekat pada ORANG bukan pada kenderaan.
+function listenLicense(uid) {
+  if (unsubscribeLicense) unsubscribeLicense();
+  unsubscribeLicense = onSnapshot(doc(db, "driverLicenses", uid), (snap) => {
+    licenseDoc = snap.exists() ? snap.data() : { classes: [] };
+    renderLicenseCard();
+  }, (err) => {
+    console.error("[ServisTracker] listenLicense error:", err);
   });
 }
 
@@ -127,6 +157,17 @@ function fmtKm(n) {
 function fmtDate(d) {
   if (!d) return "-";
   return new Date(d).toLocaleDateString("ms-MY", { year: "numeric", month: "short", day: "numeric" });
+}
+// Status untuk item yang cuma ada tarikh luput (bukan interval km/bulan) — dipakai
+// untuk Roadtax & Lesen Memandu. Tiada notifikasi automatik, cuma visual.
+function computeDateOnlyStatus(dateStr, warnDays) {
+  if (!dateStr) return { status: "na", statusLabel: "Tiada rekod", remainingDays: null };
+  const remainingDays = daysBetween(todayStr(), dateStr);
+  let status = "ok";
+  if (remainingDays <= 0) status = "danger";
+  else if (remainingDays <= (warnDays ?? 30)) status = "warn";
+  const statusLabelMap = { ok: "OK", warn: "Due Soon", danger: "Overdue" };
+  return { status, statusLabel: statusLabelMap[status], remainingDays };
 }
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -257,7 +298,72 @@ function worstStatus(vehicle) {
     const s = computeCustomItemStatus(vehicle, item).status;
     if (rank[s] > rank[worst]) worst = s;
   });
+  if (vehicle.roadtaxExpiry) {
+    const s = computeDateOnlyStatus(vehicle.roadtaxExpiry).status;
+    if (rank[s] > rank[worst]) worst = s;
+  }
   return worst;
+}
+
+// ---------- GAMBAR KENDERAAN (compress + resize di browser, simpan sbg base64 dlm Firestore) ----------
+// Firestore ada had 1MB sedokumen — so gambar WAJIB dimampat kecil dulu.
+// Guna Firebase Storage lebih "proper" tapi perlukan setup tambahan (produk
+// Firebase lain + rules baru) — kita elak untuk kekalkan SETUP_GUIDE simple.
+const PHOTO_TOO_BIG_MSG = "weh besar sangat gambar kau ni, kau rilek dulu, bende ni optional, resize gambar sampai 1MB atau snap gambar guna 3310 nokia purba kau dulu baru upload sini";
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith("image/")) {
+      reject({ notImage: true });
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      reject({ tooBig: true });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const maxDim = 480;
+        if (w > h && w > maxDim) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+        else if (h >= w && h > maxDim) { w = Math.round(w * (maxDim / h)); h = maxDim; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        let dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        if (dataUrl.length > 900 * 1024) dataUrl = canvas.toDataURL("image/jpeg", 0.5);
+        if (dataUrl.length > 900 * 1024) {
+          reject({ tooBig: true });
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject({ error: true });
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject({ error: true });
+    reader.readAsDataURL(file);
+  });
+}
+
+// Sambungkan satu <input type=file> kepada preview + callback bila gambar siap dimampat.
+function bindPhotoInput(inputEl, previewImgEl, previewWrapEl, onReady) {
+  inputEl.onchange = async () => {
+    const file = inputEl.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImageFile(file);
+      previewImgEl.src = dataUrl;
+      previewWrapEl.style.display = "block";
+      onReady(dataUrl);
+    } catch (err) {
+      showToast(PHOTO_TOO_BIG_MSG);
+      inputEl.value = "";
+    }
+  };
 }
 
 // Bina HTML satu "interval-group" untuk satu item (dipakai di borang daftar & borang ubah interval)
@@ -346,21 +452,65 @@ function renderVehicleList() {
     const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[status];
     const badgeLabel = { ok: "OK", warn: "Due Soon", danger: "Overdue", na: "Belum Log" }[status];
 
+    const hasName = !!v.vehicleName;
+    const thumbHtml = v.photoBase64 ? `<img src="${v.photoBase64}" class="vehicle-thumb" alt="">` : "";
+    let roadtaxLine = "";
+    if (v.roadtaxExpiry) {
+      const rs = computeDateOnlyStatus(v.roadtaxExpiry);
+      roadtaxLine = `<div class="vehicle-roadtax">🪪 Roadtax: ${fmtDate(v.roadtaxExpiry)} (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})</div>`;
+    }
+
     const card = document.createElement("div");
     card.className = "vehicle-card";
     card.onclick = () => openDetailView(v.id);
     card.innerHTML = `
       <div class="vehicle-card-top">
-        <div>
-          <div class="vehicle-title">${td.icon} ${td.label}</div>
-          <div class="vehicle-plate">${escapeHtml(v.plateNo) || "-"}</div>
+        <div class="vehicle-card-left">
+          ${thumbHtml}
+          <div style="min-width:0;">
+            <div class="vehicle-title">${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</div>
+            ${hasName ? `<div class="vehicle-subtype">${td.icon} ${td.label}</div>` : ""}
+            ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
+          </div>
         </div>
         <span class="status-badge ${badgeClass}">${badgeLabel}</span>
       </div>
       <div class="vehicle-mileage">Mileage semasa: <strong>${fmtKm(v.currentMileage)}</strong></div>
+      ${roadtaxLine}
     `;
     listEl.appendChild(card);
   });
+}
+
+// ---------- LESEN MEMANDU: RENDER CARD DASHBOARD ----------
+function renderLicenseCard() {
+  const classes = licenseDoc.classes || [];
+  const badgeEl = document.getElementById("licenseStatusBadge");
+  const bodyEl = document.getElementById("licenseCardBody");
+  if (!badgeEl || !bodyEl) return;
+
+  if (classes.length === 0) {
+    badgeEl.className = "status-badge status-na";
+    badgeEl.textContent = "Belum Diisi";
+    bodyEl.textContent = "Tap untuk tambah kelas lesen anda (pilihan)";
+    return;
+  }
+  const rank = { ok: 0, na: 0, warn: 1, danger: 2 };
+  let worst = "na";
+  classes.forEach((c) => {
+    const s = computeDateOnlyStatus(c.expiry).status;
+    if (rank[s] > rank[worst]) worst = s;
+  });
+  const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[worst];
+  const badgeLabel = { ok: "OK", warn: "Due Soon", danger: "Overdue", na: "-" }[worst];
+  badgeEl.className = "status-badge " + badgeClass;
+  badgeEl.textContent = badgeLabel;
+  bodyEl.innerHTML = classes.map((c) => {
+    const found = JPJ_LICENSE_CLASSES.find((x) => x.value === c.class);
+    const label = found ? found.label : c.class;
+    const s = computeDateOnlyStatus(c.expiry);
+    return `${escapeHtml(label)} — ${c.expiry ? fmtDate(c.expiry) : "tiada tarikh"} (${s.statusLabel})`;
+  }).join("<br>");
 }
 
 // ---------- DETAIL VIEW ----------
@@ -382,12 +532,31 @@ function renderDetail(id) {
   const td = typeDef(v.typeKey);
   const container = document.getElementById("detailContent");
 
+  const itemKeys = Object.keys(td.items);
   let itemsHtml = "";
-  Object.entries(td.items).forEach(([key, def]) => {
-    const s = computeItemStatus(v, key, def);
-    const log = (v.serviceLog || {})[key];
-    itemsHtml += renderItemCard(v, key, def, s, log);
-  });
+  if (itemKeys.length === 0) {
+    itemsHtml = `<div class="item-meta" style="padding:4px 0 12px;">Kenderaan jenis ni takde jadual servis standard — guna "+ Tambah Item" di bawah untuk mula tracking sendiri 🙂</div>`;
+  } else {
+    itemKeys.forEach((key) => {
+      const def = td.items[key];
+      const s = computeItemStatus(v, key, def);
+      const log = (v.serviceLog || {})[key];
+      itemsHtml += renderItemCard(v, key, def, s, log);
+    });
+  }
+
+  const rs = computeDateOnlyStatus(v.roadtaxExpiry);
+  const roadtaxHtml = `
+    <div class="item-card ${rs.status}">
+      <div class="item-top">
+        <span class="item-label">🪪 Roadtax</span>
+        <span class="status-badge status-${rs.status}">${rs.statusLabel}</span>
+      </div>
+      <div class="item-meta">${v.roadtaxExpiry
+        ? `Luput: <strong>${fmtDate(v.roadtaxExpiry)}</strong> (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})`
+        : `Belum diisi — tekan "✎ Edit Kenderaan" untuk tambah tarikh luput.`}</div>
+    </div>
+  `;
 
   let customHtml = "";
   (v.customItems || []).forEach((item) => {
@@ -395,15 +564,26 @@ function renderDetail(id) {
     customHtml += renderCustomItemCard(v.id, item, s);
   });
 
+  const photoHtml = v.photoBase64 ? `<img src="${v.photoBase64}" class="detail-photo" alt="">` : "";
+  const hasName = !!v.vehicleName;
+
   container.innerHTML = `
+    ${photoHtml}
     <div class="detail-header">
       <div>
-        <h2>${td.icon} ${td.label}</h2>
-        <div class="vehicle-plate">${escapeHtml(v.plateNo) || "-"}</div>
+        <h2>${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</h2>
+        ${hasName ? `<div class="vehicle-subtype">${td.icon} ${td.label}</div>` : ""}
+        ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
       </div>
-      <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">Kemaskini Mileage</button>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">Kemaskini Mileage</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">✎ Edit Kenderaan</button>
+      </div>
     </div>
     <div class="vehicle-mileage">Mileage semasa: <strong>${fmtKm(v.currentMileage)}</strong></div>
+
+    <div class="section-title">Roadtax</div>
+    <div class="item-list">${roadtaxHtml}</div>
 
     <div class="section-title">Jadual Servis</div>
     <div class="item-list">${itemsHtml}</div>
@@ -488,12 +668,24 @@ window.closeModal = function (id) {
 };
 
 // Add Vehicle
+let newVehiclePhotoData = null;
 document.getElementById("addVehicleBtn").onclick = () => openAddVehicleModal();
 window.openAddVehicleModal = function () {
   const sel = document.getElementById("newVehicleType");
   sel.innerHTML = Object.entries(VEHICLE_TYPES).map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join("");
+  document.getElementById("newVehicleName").value = "";
   document.getElementById("newVehiclePlate").value = "";
   document.getElementById("newVehicleMileage").value = "";
+  document.getElementById("newVehicleRoadtax").value = "";
+  newVehiclePhotoData = null;
+  document.getElementById("newVehiclePhotoInput").value = "";
+  document.getElementById("newVehiclePhotoPreviewWrap").style.display = "none";
+  bindPhotoInput(
+    document.getElementById("newVehiclePhotoInput"),
+    document.getElementById("newVehiclePhotoPreview"),
+    document.getElementById("newVehiclePhotoPreviewWrap"),
+    (dataUrl) => { newVehiclePhotoData = dataUrl; }
+  );
 
   const intervalsEl = document.getElementById("newVehicleIntervals");
   const renderForSelected = () => {
@@ -505,28 +697,137 @@ window.openAddVehicleModal = function () {
 
   document.getElementById("addVehicleModal").style.display = "flex";
 };
+window.clearNewVehiclePhoto = function () {
+  newVehiclePhotoData = null;
+  document.getElementById("newVehiclePhotoInput").value = "";
+  document.getElementById("newVehiclePhotoPreviewWrap").style.display = "none";
+};
 window.submitAddVehicle = async function () {
   if (!currentUid) return showToast("Sila log masuk dahulu");
   const typeKey = document.getElementById("newVehicleType").value;
+  const vehicleName = document.getElementById("newVehicleName").value.trim();
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
   const mileage = Number(document.getElementById("newVehicleMileage").value || 0);
-  if (!plateNo) return showToast("Sila isi no. pendaftaran");
+  const roadtaxExpiry = document.getElementById("newVehicleRoadtax").value || null;
 
   const td = typeDef(typeKey);
   const intervalsEl = document.getElementById("newVehicleIntervals");
   const intervals = collectIntervalsFromForm(intervalsEl, td.items);
 
   try {
-    await addDoc(collection(db, "vehicles"), {
+    const payload = {
       ownerId: currentUid,
       typeKey, plateNo, currentMileage: mileage,
       serviceLog: {}, customItems: [], intervals,
+      vehicleName: vehicleName || null,
+      roadtaxExpiry: roadtaxExpiry || null,
+      photoBase64: newVehiclePhotoData || null,
       createdAt: serverTimestamp()
-    });
+    };
+    await addDoc(collection(db, "vehicles"), payload);
     closeModal("addVehicleModal");
     showToast("Kenderaan didaftarkan ✅");
   } catch (err) {
     showToast("❌ Gagal daftar: " + err.message);
+  }
+};
+
+// Edit Vehicle (nama/plate/gambar/roadtax selepas daftar)
+let editVehicleTargetId = null;
+let editVehiclePhotoData = null;
+window.openEditVehicleModal = function (vehicleId) {
+  const v = vehicles.find((x) => x.id === vehicleId);
+  if (!v) return;
+  editVehicleTargetId = vehicleId;
+  editVehiclePhotoData = v.photoBase64 || null;
+  document.getElementById("editVehicleName").value = v.vehicleName || "";
+  document.getElementById("editVehiclePlate").value = v.plateNo || "";
+  document.getElementById("editVehicleRoadtax").value = v.roadtaxExpiry || "";
+  document.getElementById("editVehiclePhotoInput").value = "";
+  const previewWrap = document.getElementById("editVehiclePhotoPreviewWrap");
+  const previewImg = document.getElementById("editVehiclePhotoPreview");
+  if (v.photoBase64) {
+    previewImg.src = v.photoBase64;
+    previewWrap.style.display = "block";
+  } else {
+    previewWrap.style.display = "none";
+  }
+  bindPhotoInput(
+    document.getElementById("editVehiclePhotoInput"),
+    previewImg,
+    previewWrap,
+    (dataUrl) => { editVehiclePhotoData = dataUrl; }
+  );
+  document.getElementById("editVehicleModal").style.display = "flex";
+};
+window.clearEditVehiclePhoto = function () {
+  editVehiclePhotoData = null;
+  document.getElementById("editVehiclePhotoInput").value = "";
+  document.getElementById("editVehiclePhotoPreviewWrap").style.display = "none";
+};
+window.submitEditVehicle = async function () {
+  if (!editVehicleTargetId) return;
+  const vehicleName = document.getElementById("editVehicleName").value.trim();
+  const plateNo = document.getElementById("editVehiclePlate").value.trim();
+  const roadtaxExpiry = document.getElementById("editVehicleRoadtax").value || null;
+  try {
+    await updateDoc(doc(db, "vehicles", editVehicleTargetId), {
+      vehicleName: vehicleName || null,
+      plateNo: plateNo || null,
+      roadtaxExpiry: roadtaxExpiry || null,
+      photoBase64: editVehiclePhotoData || null
+    });
+    closeModal("editVehicleModal");
+    showToast("Kenderaan dikemaskini ✅");
+  } catch (err) {
+    showToast("❌ Gagal kemaskini: " + err.message);
+  }
+};
+
+// ---------- LESEN MEMANDU: MODAL ----------
+function licenseClassRowHTML(selectedClass, expiry) {
+  const options = JPJ_LICENSE_CLASSES.map((c) =>
+    `<option value="${c.value}" ${c.value === selectedClass ? "selected" : ""}>${escapeHtml(c.label)}</option>`
+  ).join("");
+  return `
+    <div class="class-row" data-license-row>
+      <div class="interval-field">
+        <label>Kelas Lesen</label>
+        <select data-field="class">${options}</select>
+      </div>
+      <div class="interval-field">
+        <label>Tarikh Luput</label>
+        <input type="date" data-field="expiry" value="${expiry || ""}">
+      </div>
+      <button type="button" class="class-row-delete" onclick="this.closest('[data-license-row]').remove()">✕</button>
+    </div>
+  `;
+}
+window.openLicenseModal = function () {
+  const rowsEl = document.getElementById("licenseClassRows");
+  const classes = licenseDoc.classes && licenseDoc.classes.length > 0 ? licenseDoc.classes : [{ class: "", expiry: "" }];
+  rowsEl.innerHTML = classes.map((c) => licenseClassRowHTML(c.class, c.expiry)).join("");
+  document.getElementById("licenseModal").style.display = "flex";
+};
+window.addLicenseClassRow = function () {
+  const rowsEl = document.getElementById("licenseClassRows");
+  rowsEl.insertAdjacentHTML("beforeend", licenseClassRowHTML("", ""));
+};
+window.submitLicense = async function () {
+  if (!currentUid) return showToast("Sila log masuk dahulu");
+  const rowsEl = document.getElementById("licenseClassRows");
+  const classes = [];
+  rowsEl.querySelectorAll("[data-license-row]").forEach((row) => {
+    const classVal = row.querySelector('[data-field="class"]').value;
+    const expiryVal = row.querySelector('[data-field="expiry"]').value;
+    if (classVal) classes.push({ class: classVal, expiry: expiryVal || null });
+  });
+  try {
+    await setDoc(doc(db, "driverLicenses", currentUid), { classes, updatedAt: serverTimestamp() });
+    closeModal("licenseModal");
+    showToast("Lesen dikemaskini ✅");
+  } catch (err) {
+    showToast("❌ Gagal simpan: " + err.message);
   }
 };
 

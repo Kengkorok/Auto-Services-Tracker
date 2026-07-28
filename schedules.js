@@ -87,8 +87,44 @@ const VEHICLE_TYPES = {
       brake_fluid:  { label: "Minyak Brek",   km: 20000, months: 24 },
       battery:      { label: "Bateri",        km: null,  months: 24 }
     }
+  },
+  // Dua ni sengaja tiada preset — untuk gelak/easter-egg, dan untuk sesiapa yang
+  // ada kenderaan yang betul-betul tak match mana-mana kategori atas. User isi
+  // sendiri sepenuhnya guna "+ Tambah Item" dalam halaman detail kenderaan.
+  helikopter: {
+    label: "Helikopter",
+    vehicleClass: "other",
+    icon: "🚁",
+    items: {}
+  },
+  basikal: {
+    label: "Basikal",
+    vehicleClass: "other",
+    icon: "🚲",
+    items: {}
   }
 };
 
 // Modifikasi lain / servis tambahan yang user boleh tambah manual (bukan berjadual tetap)
 const FREEFORM_ITEM_KEY = "custom_item";
+
+// ============================================================
+// Kelas Lesen Memandu Rasmi (JPJ Malaysia)
+// ============================================================
+const JPJ_LICENSE_CLASSES = [
+  { value: "A",  label: "A — Motosikal roda tiga (dgn container)" },
+  { value: "A1", label: "A1 — Motosikal roda tiga" },
+  { value: "B",  label: "B — Motosikal & sespan (>250cc)" },
+  { value: "B1", label: "B1 — Motosikal tanpa sespan (>250cc)" },
+  { value: "B2", label: "B2 — Motosikal (≤250cc)" },
+  { value: "D",  label: "D — Kereta (Manual)" },
+  { value: "DA", label: "DA — Kereta (Automatik)" },
+  { value: "E",  label: "E — Lori/Trak (Kenderaan Berat)" },
+  { value: "E1", label: "E1 — Lori (GVW Sederhana)" },
+  { value: "E2", label: "E2 — Lori (GVW Ringan, Bukan Automatik)" },
+  { value: "F",  label: "F — Traktor Pertanian" },
+  { value: "G",  label: "G — Jengkaut / Jentera Tanah" },
+  { value: "H",  label: "H — Kenderaan Tentera" },
+  { value: "I",  label: "I — Teksi / Kenderaan Awam (PSV)" },
+  { value: "lain", label: "Lain-lain" }
+];

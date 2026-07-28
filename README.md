@@ -10,11 +10,14 @@ Built for personal use (originally for a Proton Persona 1.6, a Yamaha NMAX 155, 
 
 ## ✨ Features
 
-- **Multi-vehicle dashboard** — track as many cars/motorcycles as you want, each with its own maintenance schedule.
+- **Multi-vehicle dashboard** — track as many cars/motorcycles as you want, each with its own maintenance schedule. Presets included for cars/motorcycles, plus a fully custom option (and two just-for-fun types — Helicopter 🚁 and Bicycle 🚲 — for anyone whose vehicle doesn't fit any category).
 - **Smart oil-change tracking** — pick semi-synthetic or fully-synthetic at each service, and the app auto-calculates the correct next-due mileage for that oil type.
 - **Full maintenance coverage** — engine oil, coolant, spark plugs, CVT belt/set, air filter, brake fluid, battery, plus any custom item you want to add (modifications, extra parts, anything).
 - **Mileage + time based due dates** — some items are due by km, some by months, some by both. The app flags whichever comes first.
 - **Color-coded status** — instantly see what's OK (green), due soon (yellow), or overdue (red) for every vehicle.
+- **Optional vehicle name, plate, and photo** — give each vehicle a nickname, skip the registration plate if you don't want to enter it, and attach a photo (auto-compressed client-side so it fits Firestore's size limits — no separate storage setup needed).
+- **Optional roadtax expiry tracking** — see at a glance whether your roadtax is OK, due soon, or overdue. Purely visual, no automatic notifications.
+- **Optional driving license (lesen memandu) tracking** — log one or more license classes from the official JPJ class list, each with its own expiry date. Fully optional and doesn't block core service tracking.
 - **Access from anywhere, on any device** — sign in with your Google account and your data follows you across phone, laptop, tablet, anywhere with internet.
 - **Per-account data isolation** — every vehicle is scoped to your Google account (`ownerId`) and enforced by Firestore Security Rules, so if you deploy this for a group, nobody can see or edit anyone else's vehicles.
 - **Installable on iPhone & Android** — add it to your home screen and it behaves like a native app, no browser chrome, works offline for viewing.
@@ -99,7 +102,7 @@ Not built yet, but reasonable next steps if you want to extend it:
 - Push/email/Telegram/WhatsApp reminders when a service is due soon
 - Service cost tracking / spending history
 - Export service history to PDF or CSV
-- Photo attachments per service log (receipts, parts)
+- Photo attachments per service log entry (receipts, parts) — separate from the vehicle photo already supported
 
 ---
 

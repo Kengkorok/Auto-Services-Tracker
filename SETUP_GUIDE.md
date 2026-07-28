@@ -62,6 +62,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.ownerId == request.auth.uid;
     }
+    match /driverLicenses/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
 ```
@@ -72,6 +75,10 @@ guna app yang sama (kalau anda buat public) takkan nampak/edit kenderaan anda,
 dan sebaliknya. Sebab guna akaun Google sebenar (bukan anonymous), UID anda
 kekal sama tak kira anda buka dari phone, laptop, atau device lain — data anda
 akan sentiasa sync merentas semua device anda.
+
+Bahagian `driverLicenses/{uid}` tu untuk ciri **Lesen Memandu** (pilihan) —
+setiap akaun cuma boleh baca/tulis dokumen lesen dia sendiri (ID dokumen =
+UID akaun Google tu sendiri).
 
 ## Langkah 6 — Buat Firestore Composite Index (PENTING — jangan skip)
 
@@ -153,7 +160,9 @@ Lepas ni, ada icon app di home screen anda macam app biasa — buka terus tanpa 
 
 1. Buka app → tap **Sign in with Google** → pilih akaun Google anda.
 2. Tap **+ Kenderaan** → daftar kenderaan anda (Proton Persona 1.6, Yamaha NMAX 155
-   V3, Yamaha Lagenda 115 FI, atau kenderaan custom).
+   V3, Yamaha Lagenda 115 FI, kenderaan custom, atau — kalau nak main-main —
+   Helikopter/Basikal 🚁🚲 pun ada). No. pendaftaran, gambar kenderaan, dan tarikh
+   luput roadtax semuanya **pilihan** — boleh skip kalau tak nak isi.
 3. Masukkan mileage semasa untuk setiap satu, dan ubah interval servis kalau perlu
    ikut kenderaan anda sendiri.
 4. Untuk setiap item (Minyak Enjin, Coolant, dsb.) — kalau anda ingat bila kali
@@ -164,6 +173,11 @@ Lepas ni, ada icon app di home screen anda macam app biasa — buka terus tanpa 
    auto-calculate next due.
 6. Log masuk dengan akaun Google yang sama di device lain (phone, laptop) — semua
    kenderaan dan rekod servis anda akan terus muncul, disegerak automatik.
+7. Nak tambah rekod **Lesen Memandu** (pilihan, tak wajib) — tap kad "🪪 Lesen
+   Memandu" di skrin utama, pilih kelas (ikut senarai rasmi JPJ) & tarikh luput,
+   tap **+ Tambah Kelas** kalau ada lebih dari satu kelas. Ciri ni cuma rujukan
+   visual — tiada notifikasi automatik, dan tak menjejaskan tracking servis
+   kenderaan anda langsung.
 
 ---
 
