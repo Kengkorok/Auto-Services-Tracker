@@ -276,7 +276,7 @@ function computeCustomItemStatus(vehicle, item) {
 function worstStatus(vehicle) {
   const td = typeDef(vehicle.typeKey);
   let worst = "na";
-  const rank = { ok: 0, na: 0, warn: 1, danger: 2 };
+  const rank = { na: -1, ok: 0, warn: 1, danger: 2 };
   Object.entries(td.items).forEach(([key, def]) => {
     const s = computeItemStatus(vehicle, key, def).status;
     if (rank[s] > rank[worst]) worst = s;
@@ -482,7 +482,7 @@ function renderLicenseCard() {
     bodyEl.textContent = "Tap untuk tambah kelas lesen anda (pilihan)";
     return;
   }
-  const rank = { ok: 0, na: 0, warn: 1, danger: 2 };
+  const rank = { na: -1, ok: 0, warn: 1, danger: 2 };
   let worst = "na";
   classes.forEach((c) => {
     const s = computeDateOnlyStatus(c.expiry).status;
