@@ -599,11 +599,12 @@ function renderItemCard(vehicle, key, def, s, log) {
   const vehicleId = vehicle.id;
   const eff = effectiveInterval(vehicle, key, def);
   let metaLines = [];
+  let nextServiceHtml = "";
   if (s.status === "na") {
     metaLines.push("Belum ada rekod servis — log servis pertama untuk mula tracking.");
   } else {
     metaLines.push(`Servis lepas: ${fmtKm(log?.lastMileage)} (${fmtDate(log?.lastDate)})`);
-    if (s.nextDueKm != null) metaLines.push(`Next servis (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> (${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})`);
+    if (s.nextDueKm != null) nextServiceHtml = `<div class="next-due-highlight">Next servis (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> <span class="next-due-sub">(${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})</span></div>`;
     if (s.nextDueDate != null) metaLines.push(`Next servis (tarikh): <strong>${fmtDate(s.nextDueDate)}</strong> (${s.remainingDays >= 0 ? "baki " + s.remainingDays + " hari" : "lebih " + Math.abs(s.remainingDays) + " hari"})`);
     if (s.oilType && def.oilTypes) metaLines.push(`Jenis minyak digunakan: ${def.oilTypes[s.oilType].label}`);
     if (log?.lastNote) metaLines.push(`Nota: ${escapeHtml(log.lastNote)}`);
@@ -617,6 +618,7 @@ function renderItemCard(vehicle, key, def, s, log) {
         <span class="item-label">${def.label}</span>
         <span class="status-badge status-${s.status}">${s.statusLabel}</span>
       </div>
+      ${nextServiceHtml}
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
         <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">Log Servis</button>
