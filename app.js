@@ -124,18 +124,64 @@ function listenLicense(uid) {
 }
 
 // ---------- HELPERS ----------
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+// Semua tarikh disimpan sebagai "YYYY-MM-DD" ikut masa TEMPATAN (bukan UTC).
+// toISOString() guna UTC — di Malaysia (UTC+8) tu bagi tarikh semalam antara 12am-8am.
+function pad2(n) {
+  return String(n).padStart(2, "0");
 }
+function ymd(y, m, d) {
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+function parseYMD(dateStr) {
+  const [y, m, d] = String(dateStr).slice(0, 10).split("-").map(Number);
+  return { y, m, d };
+}
+function todayStr() {
+  const now = new Date();
+  return ymd(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+// Tambah bulan dan clamp ke hari terakhir bulan (31 Jan + 1 bulan = 28/29 Feb, bukan 3 Mac).
 function addMonths(dateStr, months) {
-  const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const { y, m, d } = parseYMD(dateStr);
+  const total = (m - 1) + months;
+  const ny = y + Math.floor(total / 12);
+  const nm = ((total % 12) + 12) % 12 + 1;
+  const lastDay = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return ymd(ny, nm, Math.min(d, lastDay));
 }
 function daysBetween(dateStrA, dateStrB) {
-  const a = new Date(dateStrA);
-  const b = new Date(dateStrB);
-  return Math.round((b - a) / (1000 * 60 * 60 * 24));
+  const a = parseYMD(dateStrA), b = parseYMD(dateStrB);
+  return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000);
+}
+// "2026-11-13" dibaca oleh new Date() sebagai UTC — buat tarikh tempatan supaya paparan tak lari.
+function localDate(dateStr) {
+  const { y, m, d } = parseYMD(dateStr);
+  return new Date(y, m - 1, d);
+}
+
+// ---------- VALIDASI MILEAGE ----------
+const MAX_MILEAGE = 999999;
+// Pulangkan { value } (null = kosong) atau { error } kalau nombor tak sah.
+function readMileage(inputId) {
+  const raw = document.getElementById(inputId).value.trim();
+  if (raw === "") return { value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > MAX_MILEAGE || !Number.isInteger(n)) {
+    return { error: `Mileage mesti nombor bulat antara 0 hingga ${MAX_MILEAGE.toLocaleString("en-US")} km` };
+  }
+  return { value: n };
+}
+
+// ---------- SIMPAN KE FIRESTORE ----------
+// Firestore simpan perubahan dalam cache tempatan serta-merta (UI terus update),
+// tapi promise cuma selesai bila server sahkan — kalau line lemah/offline, ia boleh
+// tergantung lama. Jadi tutup modal terus, dan beritahu kalau server tolak.
+function runWrite(promise, okMsg, failMsg) {
+  showToast(navigator.onLine ? okMsg : okMsg + " (offline — akan sync bila online)");
+  return promise.catch((err) => {
+    console.error("[ServisTracker] Gagal simpan:", err);
+    showToast("❌ " + failMsg + ": " + (err?.message || err));
+  });
 }
 function fmtKm(n) {
   if (n == null) return "-";
@@ -143,7 +189,7 @@ function fmtKm(n) {
 }
 function fmtDate(d) {
   if (!d) return "-";
-  return new Date(d).toLocaleDateString("ms-MY", { year: "numeric", month: "short", day: "numeric" });
+  return localDate(d).toLocaleDateString("ms-MY", { year: "numeric", month: "short", day: "numeric" });
 }
 // Status untuk item yang cuma ada tarikh luput (bukan interval km/bulan) — dipakai
 // untuk Roadtax & Lesen Memandu. Tiada notifikasi automatik, cuma visual.
@@ -208,7 +254,8 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
     }
   }
 
-  if (!log || !log.lastMileage) {
+  // Rekod wujud kalau ada mileage ATAU tarikh — item ikut bulan saja (cth Bateri) tak perlukan km.
+  if (!log || (log.lastMileage == null && !log.lastDate)) {
     return {
       status: "na",
       statusLabel: "Belum ada rekod",
@@ -220,7 +267,7 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
     };
   }
 
-  const nextDueKm = intervalKm != null ? log.lastMileage + intervalKm : null;
+  const nextDueKm = intervalKm != null && log.lastMileage != null ? log.lastMileage + intervalKm : null;
   const nextDueDate = intervalMonths != null && log.lastDate ? addMonths(log.lastDate, intervalMonths) : null;
 
   const remainingKm = nextDueKm != null ? nextDueKm - (vehicle.currentMileage || 0) : null;
@@ -252,10 +299,10 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
 }
 
 function computeCustomItemStatus(vehicle, item) {
-  if (!item.lastMileage && !item.lastDate) {
+  if (item.lastMileage == null && !item.lastDate) {
     return { status: "na", statusLabel: "Belum ada rekod", nextDueKm: null, nextDueDate: null, remainingKm: null, remainingDays: null };
   }
-  const nextDueKm = item.kmInterval && item.lastMileage ? item.lastMileage + Number(item.kmInterval) : null;
+  const nextDueKm = item.kmInterval && item.lastMileage != null ?item.lastMileage + Number(item.kmInterval) : null;
   const nextDueDate = item.monthsInterval && item.lastDate ? addMonths(item.lastDate, Number(item.monthsInterval)) : null;
   const remainingKm = nextDueKm != null ? nextDueKm - (vehicle.currentMileage || 0) : null;
   const remainingDays = nextDueDate != null ? daysBetween(todayStr(), nextDueDate) : null;
@@ -603,7 +650,7 @@ function renderItemCard(vehicle, key, def, s, log) {
   if (s.status === "na") {
     metaLines.push("Belum ada rekod servis — log servis pertama untuk mula tracking.");
   } else {
-    metaLines.push(`Servis lepas: ${fmtKm(log?.lastMileage)} (${fmtDate(log?.lastDate)})`);
+    metaLines.push(`Servis lepas: ${log?.lastMileage != null ? fmtKm(log.lastMileage) + " " : ""}(${fmtDate(log?.lastDate)})`);
     if (s.nextDueKm != null) nextServiceHtml = `<div class="next-due-highlight">Next servis (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> <span class="next-due-sub">(${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})</span></div>`;
     if (s.nextDueDate != null) metaLines.push(`Next servis (tarikh): <strong>${fmtDate(s.nextDueDate)}</strong> (${s.remainingDays >= 0 ? "baki " + s.remainingDays + " hari" : "lebih " + Math.abs(s.remainingDays) + " hari"})`);
     if (s.oilType && def.oilTypes) metaLines.push(`Jenis minyak digunakan: ${def.oilTypes[s.oilType].label}`);
@@ -696,29 +743,26 @@ window.submitAddVehicle = async function () {
   const typeKey = document.getElementById("newVehicleType").value;
   const vehicleName = document.getElementById("newVehicleName").value.trim();
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
-  const mileage = Number(document.getElementById("newVehicleMileage").value || 0);
+  const m = readMileage("newVehicleMileage");
+  if (m.error) return showToast(m.error);
+  const mileage = m.value ?? 0;
   const roadtaxExpiry = document.getElementById("newVehicleRoadtax").value || null;
 
   const td = typeDef(typeKey);
   const intervalsEl = document.getElementById("newVehicleIntervals");
   const intervals = collectIntervalsFromForm(intervalsEl, td.items);
 
-  try {
-    const payload = {
-      ownerId: currentUid,
-      typeKey, plateNo, currentMileage: mileage,
-      serviceLog: {}, customItems: [], intervals,
-      vehicleName: vehicleName || null,
-      roadtaxExpiry: roadtaxExpiry || null,
-      photoBase64: newVehiclePhotoData || null,
-      createdAt: serverTimestamp()
-    };
-    await addDoc(collection(db, "vehicles"), payload);
-    closeModal("addVehicleModal");
-    showToast("Kenderaan didaftarkan ✅");
-  } catch (err) {
-    showToast("❌ Gagal daftar: " + err.message);
-  }
+  const payload = {
+    ownerId: currentUid,
+    typeKey, plateNo, currentMileage: mileage,
+    serviceLog: {}, customItems: [], intervals,
+    vehicleName: vehicleName || null,
+    roadtaxExpiry: roadtaxExpiry || null,
+    photoBase64: newVehiclePhotoData || null,
+    createdAt: serverTimestamp()
+  };
+  closeModal("addVehicleModal");
+  runWrite(addDoc(collection(db, "vehicles"), payload), "Kenderaan didaftarkan ✅", "Gagal daftar");
 };
 
 // Edit Vehicle (nama/plate/gambar/roadtax selepas daftar)
@@ -759,18 +803,13 @@ window.submitEditVehicle = async function () {
   const vehicleName = document.getElementById("editVehicleName").value.trim();
   const plateNo = document.getElementById("editVehiclePlate").value.trim();
   const roadtaxExpiry = document.getElementById("editVehicleRoadtax").value || null;
-  try {
-    await updateDoc(doc(db, "vehicles", editVehicleTargetId), {
-      vehicleName: vehicleName || null,
-      plateNo: plateNo || null,
-      roadtaxExpiry: roadtaxExpiry || null,
-      photoBase64: editVehiclePhotoData || null
-    });
-    closeModal("editVehicleModal");
-    showToast("Kenderaan dikemaskini ✅");
-  } catch (err) {
-    showToast("❌ Gagal kemaskini: " + err.message);
-  }
+  closeModal("editVehicleModal");
+  runWrite(updateDoc(doc(db, "vehicles", editVehicleTargetId), {
+    vehicleName: vehicleName || null,
+    plateNo: plateNo || null,
+    roadtaxExpiry: roadtaxExpiry || null,
+    photoBase64: editVehiclePhotoData || null
+  }), "Kenderaan dikemaskini ✅", "Gagal kemaskini");
 };
 
 // ---------- LESEN MEMANDU: MODAL ----------
@@ -811,13 +850,9 @@ window.submitLicense = async function () {
     const expiryVal = row.querySelector('[data-field="expiry"]').value;
     if (classVal) classes.push({ class: classVal, expiry: expiryVal || null });
   });
-  try {
-    await setDoc(doc(db, "driverLicenses", currentUid), { classes, updatedAt: serverTimestamp() });
-    closeModal("licenseModal");
-    showToast("Lesen dikemaskini ✅");
-  } catch (err) {
-    showToast("❌ Gagal simpan: " + err.message);
-  }
+  closeModal("licenseModal");
+  runWrite(setDoc(doc(db, "driverLicenses", currentUid), { classes, updatedAt: serverTimestamp() }),
+    "Lesen dikemaskini ✅", "Gagal simpan lesen");
 };
 
 // Edit Interval (satu item, selepas daftar)
@@ -840,11 +875,13 @@ window.submitEditInterval = async function () {
   const td = typeDef(v.typeKey);
   const container = document.getElementById("editIntervalFields");
   const intervals = collectIntervalsFromForm(container, td.items);
-  await updateDoc(doc(db, "vehicles", vehicleId), {
-    [`intervals.${itemKey}`]: intervals[itemKey]
-  });
+  const badInterval = Object.values(intervals[itemKey].oilTypes || { x: intervals[itemKey] })
+    .some((iv) => [iv.km, iv.months].some((n) => n != null && (!Number.isFinite(n) || n <= 0)));
+  if (badInterval) return showToast("Interval mesti nombor lebih dari 0 (atau kosongkan)");
   closeModal("editIntervalModal");
-  showToast("Interval dikemaskini ✅");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
+    [`intervals.${itemKey}`]: intervals[itemKey]
+  }), "Interval dikemaskini ✅", "Gagal kemaskini interval");
 };
 
 // Update Mileage
@@ -856,10 +893,18 @@ window.openUpdateMileageModal = function (id) {
   document.getElementById("updateMileageModal").style.display = "flex";
 };
 window.submitUpdateMileage = async function () {
-  const val = Number(document.getElementById("updateMileageInput").value || 0);
-  await updateDoc(doc(db, "vehicles", mileageTargetId), { currentMileage: val });
+  const m = readMileage("updateMileageInput");
+  if (m.error) return showToast(m.error);
+  if (m.value == null) return showToast("Sila isi mileage semasa");
+  const v = vehicles.find((x) => x.id === mileageTargetId);
+  const current = v?.currentMileage || 0;
+  if (m.value < current &&
+      !confirm(`Mileage baru (${fmtKm(m.value)}) lebih rendah dari sekarang (${fmtKm(current)}). Betul ke nak turunkan?`)) {
+    return;
+  }
   closeModal("updateMileageModal");
-  showToast("Mileage dikemaskini ✅");
+  runWrite(updateDoc(doc(db, "vehicles", mileageTargetId), { currentMileage: m.value }),
+    "Mileage dikemaskini ✅", "Gagal kemaskini mileage");
 };
 
 // Log Service
@@ -875,7 +920,11 @@ window.openLogServiceModal = function (vehicleId, itemKey, hasOilType, isCustom)
   if (hasOilType) {
     oilRow.style.display = "block";
     const sel = document.getElementById("logOilType");
-    sel.innerHTML = Object.entries(def.oilTypes).map(([k, o]) => `<option value="${k}">${o.label} (+${o.km}km)</option>`).join("");
+    const eff = effectiveInterval(v, itemKey, def);
+    sel.innerHTML = Object.entries(def.oilTypes).map(([k, o]) => {
+      const km = eff.oilTypes[k]?.km;
+      return `<option value="${k}">${o.label}${km != null ? ` (+${km}km)` : ""}</option>`;
+    }).join("");
   } else {
     oilRow.style.display = "none";
   }
@@ -886,33 +935,40 @@ window.openLogServiceModal = function (vehicleId, itemKey, hasOilType, isCustom)
 };
 window.submitLogService = async function () {
   const { vehicleId, itemKey, hasOilType, isCustom } = logTarget;
-  const mileage = Number(document.getElementById("logServiceMileage").value || 0);
+  const m = readMileage("logServiceMileage");
+  if (m.error) return showToast(m.error);
+  const mileage = m.value; // null = tak diisi (OK untuk item yang ikut bulan saja)
   const dateVal = document.getElementById("logServiceDate").value || todayStr();
+  if (dateVal > todayStr()) return showToast("Tarikh servis tak boleh lepas hari ini");
   const note = document.getElementById("logServiceNote").value.trim();
   const v = vehicles.find((x) => x.id === vehicleId);
+  const oilType = hasOilType ? document.getElementById("logOilType").value : undefined;
 
+  // Mileage wajib kalau item ni ada interval km — tanpa km, next servis tak boleh dikira.
+  let needsKm;
   if (isCustom) {
-    const customItems = (v.customItems || []).map((c) => {
-      if (c.id === itemKey) {
-        return { ...c, lastMileage: mileage, lastDate: dateVal, lastNote: note };
-      }
-      return c;
-    });
-    await updateDoc(doc(db, "vehicles", vehicleId), {
-      customItems,
-      currentMileage: Math.max(mileage, v.currentMileage || 0)
-    });
+    needsKm = !!(v.customItems || []).find((c) => c.id === itemKey)?.kmInterval;
   } else {
-    const oilType = hasOilType ? document.getElementById("logOilType").value : undefined;
+    const def = typeDef(v.typeKey).items[itemKey];
+    const eff = effectiveInterval(v, itemKey, def);
+    needsKm = (def.hasOilType ? eff.oilTypes[oilType]?.km : eff.km) != null;
+  }
+  if (needsKm && mileage == null) return showToast("Sila isi mileage masa servis");
+
+  const newCurrent = mileage != null ? Math.max(mileage, v.currentMileage || 0) : (v.currentMileage || 0);
+  let update;
+  if (isCustom) {
+    const customItems = (v.customItems || []).map((c) =>
+      c.id === itemKey ? { ...c, lastMileage: mileage, lastDate: dateVal, lastNote: note } : c
+    );
+    update = { customItems, currentMileage: newCurrent };
+  } else {
     const entry = { lastMileage: mileage, lastDate: dateVal, lastNote: note };
     if (oilType) entry.oilType = oilType;
-    await updateDoc(doc(db, "vehicles", vehicleId), {
-      [`serviceLog.${itemKey}`]: entry,
-      currentMileage: Math.max(mileage, v.currentMileage || 0)
-    });
+    update = { [`serviceLog.${itemKey}`]: entry, currentMileage: newCurrent };
   }
   closeModal("logServiceModal");
-  showToast("Servis direkodkan ✅");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), update), "Servis direkodkan ✅", "Gagal rekod servis");
 };
 
 // Custom Items
@@ -929,6 +985,9 @@ window.submitAddCustomItem = async function () {
   const km = document.getElementById("customItemKm").value;
   const months = document.getElementById("customItemMonths").value;
   if (!label) return showToast("Sila isi nama item");
+  if ([km, months].some((s) => s !== "" && !(Number(s) > 0))) {
+    return showToast("Interval mesti nombor lebih dari 0 (atau kosongkan)");
+  }
   const v = vehicles.find((x) => x.id === customItemTargetVehicle);
   const newItem = {
     id: "c" + Date.now(),
@@ -939,15 +998,16 @@ window.submitAddCustomItem = async function () {
     lastDate: null
   };
   const customItems = [...(v.customItems || []), newItem];
-  await updateDoc(doc(db, "vehicles", customItemTargetVehicle), { customItems });
   closeModal("addCustomItemModal");
-  showToast("Item ditambah ✅");
+  runWrite(updateDoc(doc(db, "vehicles", customItemTargetVehicle), { customItems }),
+    "Item ditambah ✅", "Gagal tambah item");
 };
-window.deleteCustomItem = async function (vehicleId, itemId) {
+window.deleteCustomItem = function (vehicleId, itemId) {
   const v = vehicles.find((x) => x.id === vehicleId);
+  const item = (v.customItems || []).find((c) => c.id === itemId);
+  if (!confirm(`Padam item "${item?.label || "ini"}"? Rekod servisnya akan hilang.`)) return;
   const customItems = (v.customItems || []).filter((c) => c.id !== itemId);
-  await updateDoc(doc(db, "vehicles", vehicleId), { customItems });
-  showToast("Item dipadam");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), { customItems }), "Item dipadam", "Gagal padam item");
 };
 
 let pendingDeleteVehicleId = null;
@@ -957,11 +1017,11 @@ window.confirmDeleteVehicle = function (vehicleId) {
 };
 window.submitDeleteVehicle = async function () {
   if (!pendingDeleteVehicleId) return;
-  await deleteDoc(doc(db, "vehicles", pendingDeleteVehicleId));
+  const id = pendingDeleteVehicleId;
   pendingDeleteVehicleId = null;
   closeModal("deleteVehicleModal");
   closeDetailView();
-  showToast("Kenderaan dipadam");
+  runWrite(deleteDoc(doc(db, "vehicles", id)), "Kenderaan dipadam", "Gagal padam kenderaan");
 };
 
 // ---------- PWA: Service Worker ----------
