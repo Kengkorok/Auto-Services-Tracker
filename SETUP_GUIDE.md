@@ -158,11 +158,13 @@ Lepas ni, ada icon app di home screen anda macam app biasa — buka terus tanpa 
 
 ## Langkah 9 — Mula Guna
 
-1. Buka app → tap **Sign in with Google** → pilih akaun Google anda.
-2. Tap **+ Kenderaan** → daftar kenderaan anda (Proton Persona 1.6, Yamaha NMAX 155
-   V3, Yamaha Lagenda 115 FI, kenderaan custom, atau — kalau nak main-main —
-   Helikopter/Basikal 🚁🚲 pun ada). No. pendaftaran, gambar kenderaan, dan tarikh
-   luput roadtax semuanya **pilihan** — boleh skip kalau tak nak isi.
+1. Buka app → tap **Log masuk dengan Google** → pilih akaun Google anda.
+   (Bahasa boleh ditukar antara Bahasa Melayu dan English di skrin log masuk.)
+2. Buka menu **☰** di atas kanan → **Tambah Kenderaan** → pilih jenis kenderaan
+   (Kereta, Motosikal, Van atau Lori). Nama, no. pendaftaran, gambar kenderaan dan
+   tarikh luput cukai jalan semuanya **pilihan**.
+   Menu yang sama juga ada pilihan **Bahasa** (BM / English), **Tema** (Gelap / Cerah)
+   dan **Log Keluar**.
 3. Masukkan mileage semasa untuk setiap satu, dan ubah interval servis kalau perlu
    ikut kenderaan anda sendiri.
 4. Untuk setiap item (Minyak Enjin, Coolant, dsb.) — kalau anda ingat bila kali
@@ -173,7 +175,7 @@ Lepas ni, ada icon app di home screen anda macam app biasa — buka terus tanpa 
    auto-calculate next due.
 6. Log masuk dengan akaun Google yang sama di device lain (phone, laptop) — semua
    kenderaan dan rekod servis anda akan terus muncul, disegerak automatik.
-7. Nak tambah rekod **Lesen Memandu** (pilihan, tak wajib) — tap kad "🪪 Lesen
+7. Nak tambah rekod **Lesen Memandu** (pilihan, tak wajib) — tap kad "Lesen
    Memandu" di skrin utama, pilih kelas (ikut senarai rasmi JPJ) & tarikh luput,
    tap **+ Tambah Kelas** kalau ada lebih dari satu kelas. Ciri ni cuma rujukan
    visual — tiada notifikasi automatik, dan tak menjejaskan tracking servis

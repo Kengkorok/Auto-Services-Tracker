@@ -1,11 +1,12 @@
 // Servis Tracker - simple offline-cache service worker
-const CACHE_NAME = "servis-tracker-v3";
+const CACHE_NAME = "servis-tracker-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./icons.js",
+  "./i18n.js",
   "./schedules.js",
   "./firebase-config.js",
   "./manifest.json",

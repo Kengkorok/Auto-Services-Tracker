@@ -20,6 +20,8 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 const connStatusEl = document.getElementById("connStatus");
+// Teks awal ("Menyambung…") dah diisi oleh i18n.js; selepas ini app.js yang urus status ni.
+connStatusEl.removeAttribute("data-i18n");
 let vehicles = []; // local cache of {id, ...data}
 let currentDetailId = null;
 let currentUid = null;
@@ -36,7 +38,7 @@ function setAuthLoading(msg) {
   connStatusEl.className = "conn-status";
 }
 function setAuthError(err) {
-  connStatusEl.innerHTML = icon("circle-x", { size: 14 }) + " Ralat: " + linkify(escapeHtml(err.message || String(err)));
+  connStatusEl.innerHTML = icon("circle-x", { size: 14 }) + " " + t("conn.error") + ": " + linkify(escapeHtml(err.message || String(err)));
   connStatusEl.className = "conn-status err";
 }
 
@@ -76,8 +78,8 @@ onAuthStateChanged(auth, (user) => {
     currentUid = user.uid;
     signedOutView.style.display = "none";
     appShell.style.display = "block";
-    document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
-    connStatusEl.innerHTML = icon("circle-check", { size: 14 }) + " Bersambung — data disegerak automatik";
+    document.getElementById("userEmail").textContent = user.displayName || user.email || t("account.fallback");
+    connStatusEl.innerHTML = icon("circle-check", { size: 14 }) + " " + t("conn.ok");
     connStatusEl.className = "conn-status ok";
     listenVehicles(user.uid);
     listenLicense(user.uid);
@@ -167,7 +169,7 @@ function readMileage(inputId) {
   if (raw === "") return { value: null };
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n > MAX_MILEAGE || !Number.isInteger(n)) {
-    return { error: `Mileage mesti nombor bulat antara 0 hingga ${MAX_MILEAGE.toLocaleString("en-US")} km` };
+    return { error: t("err.mileageRange", { max: MAX_MILEAGE.toLocaleString(locale()) }) };
   }
   return { value: n };
 }
@@ -176,9 +178,10 @@ function readMileage(inputId) {
 // Firestore simpan perubahan dalam cache tempatan serta-merta (UI terus update),
 // tapi promise cuma selesai bila server sahkan — kalau line lemah/offline, ia boleh
 // tergantung lama. Jadi tutup modal terus, dan beritahu kalau server tolak.
-function runWrite(promise, okMsg, failMsg) {
+function runWrite(promise, okKey, failKey) {
+  const okMsg = t(okKey), failMsg = t(failKey);
   if (navigator.onLine) showToast(okMsg, "success");
-  else showToast(okMsg + " (offline — akan sync bila online)", "offline");
+  else showToast(t("toast.offline", { msg: okMsg }), "offline");
   return promise.catch((err) => {
     console.error("[ServisTracker] Gagal simpan:", err);
     showToast(failMsg + ": " + (err?.message || err), "error");
@@ -186,22 +189,34 @@ function runWrite(promise, okMsg, failMsg) {
 }
 function fmtKm(n) {
   if (n == null) return "-";
-  return Number(n).toLocaleString("en-US") + " km";
+  return Number(n).toLocaleString(locale()) + " km";
 }
 function fmtDate(d) {
   if (!d) return "-";
-  return localDate(d).toLocaleDateString("ms-MY", { year: "numeric", month: "short", day: "numeric" });
+  return localDate(d).toLocaleDateString(locale(), { year: "numeric", month: "short", day: "numeric" });
+}
+function statusLabel(status) {
+  return t({ ok: "status.ok", warn: "status.warn", danger: "status.danger", na: "status.na" }[status]);
+}
+// "baki 12 hari" / "lewat 3 hari" (dan versi km)
+function daysText(n) {
+  return n >= 0 ? t("time.daysLeft", { n }) : t("time.daysOver", { n: Math.abs(n) });
+}
+function kmText(n) {
+  return n >= 0 ? t("time.kmLeft", { km: fmtKm(n) }) : t("time.kmOver", { km: fmtKm(Math.abs(n)) });
+}
+function monthsText(n) {
+  return t("time.months", { n });
 }
 // Status untuk item yang cuma ada tarikh luput (bukan interval km/bulan) — dipakai
 // untuk Roadtax & Lesen Memandu. Tiada notifikasi automatik, cuma visual.
 function computeDateOnlyStatus(dateStr, warnDays) {
-  if (!dateStr) return { status: "na", statusLabel: "Tiada rekod", remainingDays: null };
+  if (!dateStr) return { status: "na", statusLabel: t("status.noRecord"), remainingDays: null };
   const remainingDays = daysBetween(todayStr(), dateStr);
   let status = "ok";
   if (remainingDays <= 0) status = "danger";
   else if (remainingDays <= (warnDays ?? 30)) status = "warn";
-  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
-  return { status, statusLabel: statusLabelMap[status], remainingDays };
+  return { status, statusLabel: statusLabel(status), remainingDays };
 }
 // Toast ada role="status" (aria-live) — screen reader umumkan mesejnya.
 // Mesej ralat dibiar lebih lama supaya sempat dibaca.
@@ -219,6 +234,54 @@ function showToast(msg, type = "info") {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), type === "error" ? 6000 : 2500);
 }
+
+// ---------- MENU HAMBURGER ----------
+// Corak "disclosure": butang (aria-expanded) + panel. Escape / klik di luar / Tab keluar → tutup.
+const menuBtn = document.getElementById("menuBtn");
+const appMenu = document.getElementById("appMenu");
+function openMenu() {
+  appMenu.hidden = false;
+  menuBtn.setAttribute("aria-expanded", "true");
+  appMenu.querySelector("button")?.focus();
+}
+function closeMenu(focusButton = true) {
+  if (appMenu.hidden) return;
+  appMenu.hidden = true;
+  menuBtn.setAttribute("aria-expanded", "false");
+  if (focusButton) menuBtn.focus();
+}
+menuBtn.addEventListener("click", () => (appMenu.hidden ? openMenu() : closeMenu()));
+document.addEventListener("click", (e) => {
+  if (!appMenu.hidden && !e.target.closest(".menu-wrap")) closeMenu(false);
+});
+appMenu.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeMenu();
+  } else if (e.key === "Tab") {
+    setTimeout(() => {
+      if (!document.activeElement?.closest(".menu-wrap")) closeMenu(false);
+    }, 0);
+  }
+});
+window.signOutUser = ((orig) => async function () {
+  closeMenu(false);
+  return orig();
+})(window.signOutUser);
+
+// Bila bahasa ditukar: render semula semua teks dinamik.
+window.onLangChange = function () {
+  if (connStatusEl.classList.contains("ok")) {
+    connStatusEl.innerHTML = icon("circle-check", { size: 14 }) + " " + t("conn.ok");
+  }
+  if (currentUid) {
+    const u = auth.currentUser;
+    document.getElementById("userEmail").textContent = u?.displayName || u?.email || t("account.fallback");
+    renderVehicleList();
+    renderLicenseCard();
+    if (currentDetailId) renderDetail(currentDetailId);
+  }
+};
 
 // ---------- AKSESIBILITI: KAD, MODAL, RALAT MEDAN ----------
 // Elemen bukan-<button> yang ada role="button" kena respon Enter/Space macam butang.
@@ -281,7 +344,7 @@ function nextFieldId(prefix) {
   return `${prefix}-${++fieldSeq}`;
 }
 function typeDef(typeKey) {
-  return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.custom;
+  return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.car;
 }
 
 // ---------- INTERVAL OVERRIDES ----------
@@ -330,7 +393,7 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
   if (!log || (log.lastMileage == null && !log.lastDate)) {
     return {
       status: "na",
-      statusLabel: "Belum ada rekod",
+      statusLabel: t("status.noRecordYet"),
       nextDueKm: null,
       nextDueDate: null,
       remainingKm: null,
@@ -357,11 +420,9 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
-  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
-
   return {
     status,
-    statusLabel: statusLabelMap[status],
+    statusLabel: statusLabel(status),
     nextDueKm,
     nextDueDate,
     remainingKm,
@@ -372,7 +433,7 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
 
 function computeCustomItemStatus(vehicle, item) {
   if (item.lastMileage == null && !item.lastDate) {
-    return { status: "na", statusLabel: "Belum ada rekod", nextDueKm: null, nextDueDate: null, remainingKm: null, remainingDays: null };
+    return { status: "na", statusLabel: t("status.noRecordYet"), nextDueKm: null, nextDueDate: null, remainingKm: null, remainingDays: null };
   }
   const nextDueKm = item.kmInterval && item.lastMileage != null ?item.lastMileage + Number(item.kmInterval) : null;
   const nextDueDate = item.monthsInterval && item.lastDate ? addMonths(item.lastDate, Number(item.monthsInterval)) : null;
@@ -388,8 +449,7 @@ function computeCustomItemStatus(vehicle, item) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
-  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
-  return { status, statusLabel: statusLabelMap[status], nextDueKm, nextDueDate, remainingKm, remainingDays };
+  return { status, statusLabel: statusLabel(status), nextDueKm, nextDueDate, remainingKm, remainingDays };
 }
 
 function worstStatus(vehicle) {
@@ -415,7 +475,6 @@ function worstStatus(vehicle) {
 // Firestore ada had 1MB sedokumen — so gambar WAJIB dimampat kecil dulu.
 // Guna Firebase Storage lebih "proper" tapi perlukan setup tambahan (produk
 // Firebase lain + rules baru) — kita elak untuk kekalkan SETUP_GUIDE simple.
-const PHOTO_TOO_BIG_MSG = "weh besar sangat gambar kau ni, kau rilek dulu, bende ni optional, resize gambar sampai 1MB atau snap gambar guna 3310 nokia purba kau dulu baru upload sini";
 
 function compressImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -466,7 +525,7 @@ function bindPhotoInput(inputEl, previewImgEl, previewWrapEl, onReady) {
       previewWrapEl.style.display = "block";
       onReady(dataUrl);
     } catch (err) {
-      showToast(PHOTO_TOO_BIG_MSG, "error");
+      showToast(t("err.photo"), "error");
       inputEl.value = "";
     }
   };
@@ -488,25 +547,25 @@ function renderIntervalGroupHTML(itemKey, def, values) {
       <div role="group" aria-labelledby="${subId}">
         <div class="interval-subtitle" id="${subId}">${label}</div>
         <div class="interval-row">
-          ${field("Interval (km)", prefix + "Km", iv.km)}
-          ${field("Interval (bulan)", prefix + "Months", iv.months)}
+          ${field(t("interval.km"), prefix + "Km", iv.km)}
+          ${field(t("interval.months"), prefix + "Months", iv.months)}
         </div>
       </div>`;
     };
-    inner = sub("Semi Sintetik", "semi", values.oilTypes.semi) + sub("Fully Sintetik", "fully", values.oilTypes.fully);
+    inner = sub(t("oil.semi"), "semi", values.oilTypes.semi) + sub(t("oil.fully"), "fully", values.oilTypes.fully);
   } else {
     inner = `
       <div class="interval-row">
-        ${field("Interval (km)", "km", values.km, "kosongkan jika tiada")}
-        ${field("Interval (bulan)", "months", values.months, "kosongkan jika tiada")}
+        ${field(t("interval.km"), "km", values.km, t("interval.blank"))}
+        ${field(t("interval.months"), "months", values.months, t("interval.blank"))}
       </div>
     `;
   }
   const titleId = nextFieldId("ivtitle");
   return `
     <div class="interval-group" data-item-key="${itemKey}" role="group" aria-labelledby="${titleId}">
-      <div class="interval-group-title" id="${titleId}">${def.label}</div>
-      ${def.note ? `<div class="interval-group-note">${def.note}</div>` : ""}
+      <div class="interval-group-title" id="${titleId}">${tr(def.label)}</div>
+      ${def.note ? `<div class="interval-group-note">${tr(def.note)}</div>` : ""}
       ${inner}
     </div>
   `;
@@ -562,15 +621,12 @@ function renderVehicleList() {
   vehicles.forEach((v) => {
     const td = typeDef(v.typeKey);
     const status = worstStatus(v);
-    const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[status];
-    const badgeLabel = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat", na: "Belum Log" }[status];
-
     const hasName = !!v.vehicleName;
     const thumbHtml = v.photoBase64 ? `<img src="${v.photoBase64}" class="vehicle-thumb" alt="">` : "";
     let roadtaxLine = "";
     if (v.roadtaxExpiry) {
       const rs = computeDateOnlyStatus(v.roadtaxExpiry);
-      roadtaxLine = `<div class="vehicle-roadtax">${icon("id-card", { size: 14 })} Roadtax: ${fmtDate(v.roadtaxExpiry)} (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})</div>`;
+      roadtaxLine = `<div class="vehicle-roadtax">${icon("id-card", { size: 14 })} ${t("vehicle.roadtax")}: ${fmtDate(v.roadtaxExpiry)} (${daysText(rs.remainingDays)})</div>`;
     }
 
     const card = document.createElement("div");
@@ -585,14 +641,14 @@ function renderVehicleList() {
         <div class="vehicle-card-left">
           ${thumbHtml}
           <div style="min-width:0;">
-            <div class="vehicle-title">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon) + " " + td.label}</div>
-            ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${td.label}</div>` : ""}
+            <div class="vehicle-title">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon) + " " + tr(td.label)}</div>
+            ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${tr(td.label)}</div>` : ""}
             ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
           </div>
         </div>
-        <span class="status-badge ${badgeClass}">${badgeLabel}</span>
+        <span class="status-badge status-${status}">${statusLabel(status)}</span>
       </div>
-      <div class="vehicle-mileage">Mileage semasa: <strong>${fmtKm(v.currentMileage)}</strong></div>
+      <div class="vehicle-mileage">${t("vehicle.mileage")}: <strong>${fmtKm(v.currentMileage)}</strong></div>
       ${roadtaxLine}
     `;
     listEl.appendChild(card);
@@ -605,11 +661,14 @@ function renderLicenseCard() {
   const badgeEl = document.getElementById("licenseStatusBadge");
   const bodyEl = document.getElementById("licenseCardBody");
   if (!badgeEl || !bodyEl) return;
+  // Kandungan kad ni diurus oleh JS (bukan applyI18n) supaya tak ditimpa bila tukar bahasa.
+  badgeEl.removeAttribute("data-i18n");
+  bodyEl.removeAttribute("data-i18n");
 
   if (classes.length === 0) {
     badgeEl.className = "status-badge status-na";
-    badgeEl.textContent = "Belum Diisi";
-    bodyEl.textContent = "Tap untuk tambah kelas lesen anda (pilihan)";
+    badgeEl.textContent = t("license.emptyBadge");
+    bodyEl.textContent = t("license.emptyBody");
     return;
   }
   const rank = { na: -1, ok: 0, warn: 1, danger: 2 };
@@ -618,15 +677,13 @@ function renderLicenseCard() {
     const s = computeDateOnlyStatus(c.expiry).status;
     if (rank[s] > rank[worst]) worst = s;
   });
-  const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[worst];
-  const badgeLabel = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat", na: "-" }[worst];
-  badgeEl.className = "status-badge " + badgeClass;
-  badgeEl.textContent = badgeLabel;
+  badgeEl.className = "status-badge status-" + worst;
+  badgeEl.textContent = worst === "na" ? "-" : statusLabel(worst);
   bodyEl.innerHTML = classes.map((c) => {
     const found = JPJ_LICENSE_CLASSES.find((x) => x.value === c.class);
-    const label = found ? found.label : c.class;
+    const label = found ? tr(found.label) : c.class;
     const s = computeDateOnlyStatus(c.expiry);
-    return `${escapeHtml(label)} — ${c.expiry ? fmtDate(c.expiry) : "tiada tarikh"} (${s.statusLabel})`;
+    return `${escapeHtml(label)} — ${c.expiry ? fmtDate(c.expiry) : t("license.noDate")} (${s.statusLabel})`;
   }).join("<br>");
 }
 
@@ -657,7 +714,7 @@ function renderDetail(id) {
   const itemKeys = Object.keys(td.items);
   let itemsHtml = "";
   if (itemKeys.length === 0) {
-    itemsHtml = `<div class="item-meta" style="padding:4px 0 12px;">Kenderaan jenis ni takde jadual servis standard — guna "+ Tambah Item" di bawah untuk mula tracking sendiri.</div>`;
+    itemsHtml = `<div class="item-meta" style="padding:4px 0 12px;">${t("detail.noSchedule")}</div>`;
   } else {
     itemKeys.forEach((key) => {
       const def = td.items[key];
@@ -671,12 +728,12 @@ function renderDetail(id) {
   const roadtaxHtml = `
     <div class="item-card ${rs.status}">
       <div class="item-top">
-        <span class="item-label">${icon("id-card")} Roadtax</span>
+        <span class="item-label">${icon("id-card")} ${t("vehicle.roadtax")}</span>
         <span class="status-badge status-${rs.status}">${rs.statusLabel}</span>
       </div>
       <div class="item-meta">${v.roadtaxExpiry
-        ? `Luput: <strong>${fmtDate(v.roadtaxExpiry)}</strong> (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})`
-        : `Belum diisi — tekan "Edit Kenderaan" untuk tambah tarikh luput.`}</div>
+        ? `${t("roadtax.expires")}: <strong>${fmtDate(v.roadtaxExpiry)}</strong> (${daysText(rs.remainingDays)})`
+        : t("roadtax.notSet")}</div>
     </div>
   `;
 
@@ -693,41 +750,38 @@ function renderDetail(id) {
     ${photoHtml}
     <div class="detail-header">
       <div>
-        <h2 tabindex="-1">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon, { size: 22 }) + " " + td.label}</h2>
-        ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${td.label}</div>` : ""}
+        <h2 tabindex="-1">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon, { size: 22 }) + " " + tr(td.label)}</h2>
+        ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${tr(td.label)}</div>` : ""}
         ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">Kemaskini Mileage</button>
-        <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">${icon("pencil", { size: 14 })} Edit Kenderaan</button>
+        <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">${t("detail.updateMileage")}</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">${icon("pencil", { size: 14 })} ${t("detail.editVehicle")}</button>
       </div>
     </div>
-    <div class="vehicle-mileage">Mileage semasa: <strong>${fmtKm(v.currentMileage)}</strong></div>
+    <div class="vehicle-mileage">${t("vehicle.mileage")}: <strong>${fmtKm(v.currentMileage)}</strong></div>
 
-    <div class="section-title">Roadtax</div>
+    <div class="section-title">${t("vehicle.roadtax")}</div>
     <div class="item-list">${roadtaxHtml}</div>
 
-    <div class="section-title">Jadual Servis</div>
+    <div class="section-title">${t("detail.schedule")}</div>
     <div class="item-list">${itemsHtml}</div>
 
-    <div class="section-title">Item Tambahan / Modifikasi</div>
+    <div class="section-title">${t("detail.customItems")}</div>
     <div class="item-list">${customHtml}</div>
-    <div style="margin-top:12px;">
-      <button class="btn btn-secondary btn-sm" onclick="openAddCustomItemModal('${v.id}')">${icon("plus", { size: 16 })} Tambah Item</button>
-      <button class="btn btn-danger btn-sm" onclick="confirmDeleteVehicle('${v.id}')">Padam Kenderaan Ini</button>
+    <div class="detail-actions">
+      <button class="btn btn-secondary btn-sm" onclick="openAddCustomItemModal('${v.id}')">${icon("plus", { size: 16 })} ${t("detail.addItem")}</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteVehicle('${v.id}')">${t("detail.deleteVehicle")}</button>
     </div>
   `;
 }
 
 function intervalSummaryText(def, eff) {
+  const part = (iv) => [iv.km != null ? fmtKm(iv.km) : null, iv.months != null ? monthsText(iv.months) : null].filter(Boolean).join(" / ");
   if (def.hasOilType) {
-    const s = eff.oilTypes.semi, f = eff.oilTypes.fully;
-    const sPart = [s.km != null ? fmtKm(s.km) : null, s.months != null ? s.months + " bulan" : null].filter(Boolean).join(" / ");
-    const fPart = [f.km != null ? fmtKm(f.km) : null, f.months != null ? f.months + " bulan" : null].filter(Boolean).join(" / ");
-    return `Semi: ${sPart || "-"} &nbsp;•&nbsp; Fully: ${fPart || "-"}`;
+    return `${t("oil.semi")}: ${part(eff.oilTypes.semi) || "-"} &nbsp;•&nbsp; ${t("oil.fully")}: ${part(eff.oilTypes.fully) || "-"}`;
   }
-  const part = [eff.km != null ? fmtKm(eff.km) : null, eff.months != null ? eff.months + " bulan" : null].filter(Boolean).join(" / ");
-  return part || "Tiada interval ditetapkan";
+  return part(eff) || t("item.noInterval");
 }
 
 function renderItemCard(vehicle, key, def, s, log) {
@@ -736,28 +790,28 @@ function renderItemCard(vehicle, key, def, s, log) {
   let metaLines = [];
   let nextServiceHtml = "";
   if (s.status === "na") {
-    metaLines.push("Belum ada rekod servis — log servis pertama untuk mula tracking.");
+    metaLines.push(t("item.noRecord"));
   } else {
-    metaLines.push(`Servis lepas: ${log?.lastMileage != null ? fmtKm(log.lastMileage) + " " : ""}(${fmtDate(log?.lastDate)})`);
-    if (s.nextDueKm != null) nextServiceHtml = `<div class="next-due-highlight">Next servis (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> <span class="next-due-sub">(${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})</span></div>`;
-    if (s.nextDueDate != null) metaLines.push(`Next servis (tarikh): <strong>${fmtDate(s.nextDueDate)}</strong> (${s.remainingDays >= 0 ? "baki " + s.remainingDays + " hari" : "lebih " + Math.abs(s.remainingDays) + " hari"})`);
-    if (s.oilType && def.oilTypes) metaLines.push(`Jenis minyak digunakan: ${def.oilTypes[s.oilType].label}`);
-    if (log?.lastNote) metaLines.push(`Nota: ${escapeHtml(log.lastNote)}`);
+    metaLines.push(`${t("item.last")}: ${log?.lastMileage != null ? fmtKm(log.lastMileage) + " " : ""}(${fmtDate(log?.lastDate)})`);
+    if (s.nextDueKm != null) nextServiceHtml = `<div class="next-due-highlight">${t("item.nextKm")}: <strong>${fmtKm(s.nextDueKm)}</strong> <span class="next-due-sub">(${kmText(s.remainingKm)})</span></div>`;
+    if (s.nextDueDate != null) metaLines.push(`${t("item.nextDate")}: <strong>${fmtDate(s.nextDueDate)}</strong> (${daysText(s.remainingDays)})`);
+    if (s.oilType && def.oilTypes) metaLines.push(`${t("item.oilUsed")}: ${t("oil." + s.oilType)}`);
+    if (log?.lastNote) metaLines.push(`${t("item.note")}: ${escapeHtml(log.lastNote)}`);
   }
-  metaLines.push(`Interval semasa: ${intervalSummaryText(def, eff)}`);
-  if (def.note) metaLines.push(`<em>${def.note}</em>`);
+  metaLines.push(`${t("item.interval")}: ${intervalSummaryText(def, eff)}`);
+  if (def.note) metaLines.push(`<em>${tr(def.note)}</em>`);
 
   return `
     <div class="item-card ${s.status}">
       <div class="item-top">
-        <span class="item-label">${def.label}</span>
+        <span class="item-label">${tr(def.label)}</span>
         <span class="status-badge status-${s.status}">${s.statusLabel}</span>
       </div>
       ${nextServiceHtml}
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
-        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">Log Servis</button>
-        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} Ubah Interval</button>
+        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">${t("item.log")}</button>
+        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} ${t("item.editInterval")}</button>
       </div>
     </div>
   `;
@@ -766,10 +820,10 @@ function renderItemCard(vehicle, key, def, s, log) {
 function renderCustomItemCard(vehicleId, item, s) {
   let metaLines = [];
   if (s.status === "na") {
-    metaLines.push("Belum ada rekod.");
+    metaLines.push(t("custom.noRecord"));
   } else {
-    if (s.nextDueKm != null) metaLines.push(`Next (mileage): <strong>${fmtKm(s.nextDueKm)}</strong> (${s.remainingKm >= 0 ? "baki " + fmtKm(s.remainingKm) : "lebih " + fmtKm(Math.abs(s.remainingKm))})`);
-    if (s.nextDueDate != null) metaLines.push(`Next (tarikh): <strong>${fmtDate(s.nextDueDate)}</strong>`);
+    if (s.nextDueKm != null) metaLines.push(`${t("custom.nextKm")}: <strong>${fmtKm(s.nextDueKm)}</strong> (${kmText(s.remainingKm)})`);
+    if (s.nextDueDate != null) metaLines.push(`${t("custom.nextDate")}: <strong>${fmtDate(s.nextDueDate)}</strong>`);
   }
   return `
     <div class="item-card ${s.status}">
@@ -779,8 +833,8 @@ function renderCustomItemCard(vehicleId, item, s) {
       </div>
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
-        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${item.id}', false, true)">Log</button>
-        <button class="btn btn-secondary btn-sm" onclick="deleteCustomItem('${vehicleId}', '${item.id}')">Padam</button>
+        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${item.id}', false, true)">${t("custom.log")}</button>
+        <button class="btn btn-secondary btn-sm" onclick="deleteCustomItem('${vehicleId}', '${item.id}')">${t("custom.delete")}</button>
       </div>
     </div>
   `;
@@ -790,10 +844,16 @@ function renderCustomItemCard(vehicleId, item, s) {
 
 // Add Vehicle
 let newVehiclePhotoData = null;
-document.getElementById("addVehicleBtn").onclick = () => openAddVehicleModal();
+document.getElementById("addVehicleBtn").onclick = () => {
+  closeMenu(true); // fokus ke butang menu dulu, supaya modal pulangkan fokus ke situ
+  openAddVehicleModal();
+};
 window.openAddVehicleModal = function () {
   const sel = document.getElementById("newVehicleType");
-  sel.innerHTML = Object.entries(VEHICLE_TYPES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
+  // Hanya jenis semasa (Kereta, Motosikal, Van, Lori) — jenis lama disorok.
+  sel.innerHTML = Object.entries(VEHICLE_TYPES)
+    .filter(([, v]) => !v.legacy)
+    .map(([k, v]) => `<option value="${k}">${escapeHtml(tr(v.label))}</option>`).join("");
   document.getElementById("newVehicleName").value = "";
   document.getElementById("newVehiclePlate").value = "";
   document.getElementById("newVehicleMileage").value = "";
@@ -824,7 +884,7 @@ window.clearNewVehiclePhoto = function () {
   document.getElementById("newVehiclePhotoPreviewWrap").style.display = "none";
 };
 window.submitAddVehicle = async function () {
-  if (!currentUid) return showToast("Sila log masuk dahulu", "error");
+  if (!currentUid) return showToast(t("err.signInFirst"), "error");
   const typeKey = document.getElementById("newVehicleType").value;
   const vehicleName = document.getElementById("newVehicleName").value.trim();
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
@@ -847,7 +907,7 @@ window.submitAddVehicle = async function () {
     createdAt: serverTimestamp()
   };
   closeModal("addVehicleModal");
-  runWrite(addDoc(collection(db, "vehicles"), payload), "Kenderaan didaftarkan ", "Gagal daftar");
+  runWrite(addDoc(collection(db, "vehicles"), payload), "toast.vehicleAdded", "toast.vehicleAddFail");
 };
 
 // Edit Vehicle (nama/plate/gambar/roadtax selepas daftar)
@@ -894,27 +954,27 @@ window.submitEditVehicle = async function () {
     plateNo: plateNo || null,
     roadtaxExpiry: roadtaxExpiry || null,
     photoBase64: editVehiclePhotoData || null
-  }), "Kenderaan dikemaskini ", "Gagal kemaskini");
+  }), "toast.vehicleUpdated", "toast.vehicleUpdateFail");
 };
 
 // ---------- LESEN MEMANDU: MODAL ----------
 function licenseClassRowHTML(selectedClass, expiry) {
   const options = JPJ_LICENSE_CLASSES.map((c) =>
-    `<option value="${c.value}" ${c.value === selectedClass ? "selected" : ""}>${escapeHtml(c.label)}</option>`
+    `<option value="${c.value}" ${c.value === selectedClass ? "selected" : ""}>${escapeHtml(tr(c.label))}</option>`
   ).join("");
   const classId = nextFieldId("lic-class");
   const expiryId = nextFieldId("lic-expiry");
   return `
     <div class="class-row" data-license-row>
       <div class="interval-field">
-        <label for="${classId}">Kelas Lesen</label>
+        <label for="${classId}">${t("license.class")}</label>
         <select id="${classId}" data-field="class">${options}</select>
       </div>
       <div class="interval-field">
-        <label for="${expiryId}">Tarikh Luput</label>
+        <label for="${expiryId}">${t("license.expiry")}</label>
         <input id="${expiryId}" type="date" data-field="expiry" value="${expiry || ""}">
       </div>
-      <button type="button" class="class-row-delete" aria-label="Padam kelas lesen ini" onclick="this.closest('[data-license-row]').remove()">${icon("x")}</button>
+      <button type="button" class="class-row-delete" aria-label="${t("license.removeRow")}" onclick="this.closest('[data-license-row]').remove()">${icon("x")}</button>
     </div>
   `;
 }
@@ -929,7 +989,7 @@ window.addLicenseClassRow = function () {
   rowsEl.insertAdjacentHTML("beforeend", licenseClassRowHTML("", ""));
 };
 window.submitLicense = async function () {
-  if (!currentUid) return showToast("Sila log masuk dahulu", "error");
+  if (!currentUid) return showToast(t("err.signInFirst"), "error");
   const rowsEl = document.getElementById("licenseClassRows");
   const classes = [];
   rowsEl.querySelectorAll("[data-license-row]").forEach((row) => {
@@ -939,7 +999,7 @@ window.submitLicense = async function () {
   });
   closeModal("licenseModal");
   runWrite(setDoc(doc(db, "driverLicenses", currentUid), { classes, updatedAt: serverTimestamp() }),
-    "Lesen dikemaskini ", "Gagal simpan lesen");
+    "toast.licenseSaved", "toast.licenseFail");
 };
 
 // Edit Interval (satu item, selepas daftar)
@@ -951,7 +1011,7 @@ window.openEditIntervalModal = function (vehicleId, itemKey) {
   const def = td.items[itemKey];
   const eff = effectiveInterval(v, itemKey, def);
 
-  document.getElementById("editIntervalTitle").textContent = "Ubah Interval — " + def.label;
+  document.getElementById("editIntervalTitle").textContent = t("editInterval.title") + " — " + tr(def.label);
   const container = document.getElementById("editIntervalFields");
   container.innerHTML = renderIntervalGroupHTML(itemKey, def, eff);
   openModal("editIntervalModal");
@@ -964,11 +1024,11 @@ window.submitEditInterval = async function () {
   const intervals = collectIntervalsFromForm(container, td.items);
   const badInput = [...container.querySelectorAll("input[data-field]")]
     .find((el) => el.value !== "" && !(Number(el.value) > 0));
-  if (badInput) return fieldError(badInput, "Interval mesti nombor lebih dari 0 (atau kosongkan)");
+  if (badInput) return fieldError(badInput, t("err.intervalPositive"));
   closeModal("editIntervalModal");
   runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
     [`intervals.${itemKey}`]: intervals[itemKey]
-  }), "Interval dikemaskini ", "Gagal kemaskini interval");
+  }), "toast.intervalSaved", "toast.intervalFail");
 };
 
 // Update Mileage
@@ -982,16 +1042,16 @@ window.openUpdateMileageModal = function (id) {
 window.submitUpdateMileage = async function () {
   const m = readMileage("updateMileageInput");
   if (m.error) return fieldError("updateMileageInput", m.error);
-  if (m.value == null) return fieldError("updateMileageInput", "Sila isi mileage semasa");
+  if (m.value == null) return fieldError("updateMileageInput", t("err.mileageRequired"));
   const v = vehicles.find((x) => x.id === mileageTargetId);
   const current = v?.currentMileage || 0;
   if (m.value < current &&
-      !confirm(`Mileage baru (${fmtKm(m.value)}) lebih rendah dari sekarang (${fmtKm(current)}). Betul ke nak turunkan?`)) {
+      !confirm(t("err.mileageLower", { next: fmtKm(m.value), current: fmtKm(current) }))) {
     return;
   }
   closeModal("updateMileageModal");
   runWrite(updateDoc(doc(db, "vehicles", mileageTargetId), { currentMileage: m.value }),
-    "Mileage dikemaskini ", "Gagal kemaskini mileage");
+    "toast.mileageSaved", "toast.mileageFail");
 };
 
 // Log Service
@@ -1002,7 +1062,7 @@ window.openLogServiceModal = function (vehicleId, itemKey, hasOilType, isCustom)
   const td = typeDef(v.typeKey);
   const def = isCustom ? (v.customItems || []).find((c) => c.id === itemKey) : td.items[itemKey];
 
-  document.getElementById("logServiceTitle").textContent = "Log Servis — " + (def.label);
+  document.getElementById("logServiceTitle").textContent = t("log.title") + " — " + tr(def.label);
   const oilRow = document.getElementById("oilTypeRow");
   if (hasOilType) {
     oilRow.style.display = "block";
@@ -1010,7 +1070,7 @@ window.openLogServiceModal = function (vehicleId, itemKey, hasOilType, isCustom)
     const eff = effectiveInterval(v, itemKey, def);
     sel.innerHTML = Object.entries(def.oilTypes).map(([k, o]) => {
       const km = eff.oilTypes[k]?.km;
-      return `<option value="${k}">${o.label}${km != null ? ` (+${km}km)` : ""}</option>`;
+      return `<option value="${k}">${t("oil." + k)}${km != null ? ` (+${fmtKm(km)})` : ""}</option>`;
     }).join("");
   } else {
     oilRow.style.display = "none";
@@ -1026,7 +1086,7 @@ window.submitLogService = async function () {
   if (m.error) return fieldError("logServiceMileage", m.error);
   const mileage = m.value; // null = tak diisi (OK untuk item yang ikut bulan saja)
   const dateVal = document.getElementById("logServiceDate").value || todayStr();
-  if (dateVal > todayStr()) return fieldError("logServiceDate", "Tarikh servis tak boleh lepas hari ini");
+  if (dateVal > todayStr()) return fieldError("logServiceDate", t("err.dateFuture"));
   const note = document.getElementById("logServiceNote").value.trim();
   const v = vehicles.find((x) => x.id === vehicleId);
   const oilType = hasOilType ? document.getElementById("logOilType").value : undefined;
@@ -1040,7 +1100,7 @@ window.submitLogService = async function () {
     const eff = effectiveInterval(v, itemKey, def);
     needsKm = (def.hasOilType ? eff.oilTypes[oilType]?.km : eff.km) != null;
   }
-  if (needsKm && mileage == null) return fieldError("logServiceMileage", "Sila isi mileage masa servis — item ni dikira ikut km");
+  if (needsKm && mileage == null) return fieldError("logServiceMileage", t("err.mileageNeeded"));
 
   const newCurrent = mileage != null ? Math.max(mileage, v.currentMileage || 0) : (v.currentMileage || 0);
   let update;
@@ -1055,7 +1115,7 @@ window.submitLogService = async function () {
     update = { [`serviceLog.${itemKey}`]: entry, currentMileage: newCurrent };
   }
   closeModal("logServiceModal");
-  runWrite(updateDoc(doc(db, "vehicles", vehicleId), update), "Servis direkodkan ", "Gagal rekod servis");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), update), "toast.serviceSaved", "toast.serviceFail");
 };
 
 // Custom Items
@@ -1071,9 +1131,9 @@ window.submitAddCustomItem = async function () {
   const label = document.getElementById("customItemLabel").value.trim();
   const km = document.getElementById("customItemKm").value;
   const months = document.getElementById("customItemMonths").value;
-  if (!label) return fieldError("customItemLabel", "Sila isi nama item");
-  if (km !== "" && !(Number(km) > 0)) return fieldError("customItemKm", "Interval mesti nombor lebih dari 0 (atau kosongkan)");
-  if (months !== "" && !(Number(months) > 0)) return fieldError("customItemMonths", "Interval mesti nombor lebih dari 0 (atau kosongkan)");
+  if (!label) return fieldError("customItemLabel", t("err.itemName"));
+  if (km !== "" && !(Number(km) > 0)) return fieldError("customItemKm", t("err.intervalPositive"));
+  if (months !== "" && !(Number(months) > 0)) return fieldError("customItemMonths", t("err.intervalPositive"));
   const v = vehicles.find((x) => x.id === customItemTargetVehicle);
   const newItem = {
     id: "c" + Date.now(),
@@ -1086,14 +1146,14 @@ window.submitAddCustomItem = async function () {
   const customItems = [...(v.customItems || []), newItem];
   closeModal("addCustomItemModal");
   runWrite(updateDoc(doc(db, "vehicles", customItemTargetVehicle), { customItems }),
-    "Item ditambah ", "Gagal tambah item");
+    "toast.itemAdded", "toast.itemAddFail");
 };
 window.deleteCustomItem = function (vehicleId, itemId) {
   const v = vehicles.find((x) => x.id === vehicleId);
   const item = (v.customItems || []).find((c) => c.id === itemId);
-  if (!confirm(`Padam item "${item?.label || "ini"}"? Rekod servisnya akan hilang.`)) return;
+  if (!confirm(t("confirm.deleteItem", { name: item?.label || "" }))) return;
   const customItems = (v.customItems || []).filter((c) => c.id !== itemId);
-  runWrite(updateDoc(doc(db, "vehicles", vehicleId), { customItems }), "Item dipadam", "Gagal padam item");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), { customItems }), "toast.itemDeleted", "toast.itemDeleteFail");
 };
 
 let pendingDeleteVehicleId = null;
@@ -1107,7 +1167,7 @@ window.submitDeleteVehicle = async function () {
   pendingDeleteVehicleId = null;
   closeModal("deleteVehicleModal");
   closeDetailView();
-  runWrite(deleteDoc(doc(db, "vehicles", id)), "Kenderaan dipadam", "Gagal padam kenderaan");
+  runWrite(deleteDoc(doc(db, "vehicles", id)), "toast.vehicleDeleted", "toast.vehicleDeleteFail");
 };
 
 // ---------- PWA: Service Worker ----------

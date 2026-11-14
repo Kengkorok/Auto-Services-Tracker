@@ -1,8 +1,7 @@
 /* ============================================================
-   Servis Tracker — style.css  (urban cyberpunk redesign)
-   Drop-in replacement for the repo's style.css. Same selectors,
-   same markup, no JS changes. Requires the Google Fonts <link>
-   in index.html — see handoff/README.md.
+   Servis Tracker — style.css
+   Tema asal: gelap. Tema cerah: :root[data-theme="light"] (lihat bawah token).
+   Semua warna melalui token supaya kedua-dua tema konsisten.
    ============================================================ */
 
 :root{
@@ -38,7 +37,70 @@
   --glow-cyan:0 0 0 1px rgba(34,211,238,.35), 0 0 18px rgba(34,211,238,.28);
   --glow-danger:0 0 0 1px rgba(255,71,87,.4), 0 0 18px rgba(255,71,87,.25);
   --scanlines:repeating-linear-gradient(180deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
+  /* permukaan & warna khas tema */
+  --bg-gradient:radial-gradient(120% 70% at 50% -10%, #12213A 0%, #05070E 60%);
+  --bg-modal:var(--bg-card-2);
+  --surface-glass:rgba(8,13,24,0.86);
+  --surface-glass-strong:rgba(8,13,24,0.9);
+  --grid-line:rgba(34,211,238,.05);
+  --primary-glow:rgba(34,211,238,.5);
+  --link-hover:#67E8F9;
+  --on-primary:#00212F;
+  --on-danger:#150204;
+  --danger-text:#FF8A94;
+  --danger-active:#C4303C;
+  --toast-bg:#080D18;
+  --backdrop:rgba(3,5,10,0.72);
+  --menu-shadow:0 16px 40px rgba(0,0,0,.55);
+  color-scheme:dark;
 }
+
+/* ---------- Tema cerah ---------- */
+/* Semua pasangan teks/latar >= 4.5:1, sempadan input >= 3:1 (WCAG AA). */
+:root[data-theme="light"]{
+  --void:#F4F7FB;
+  --bg:#F4F7FB;
+  --bg-card:#FFFFFF;
+  --bg-card-2:#F1F5F9;
+  --bg-sunken:#FFFFFF;
+  --bg-modal:#FFFFFF;
+  --text:#0F172A;
+  --text-dim:#334155;
+  --text-faint:#52627A;
+  --primary:#0E7490;
+  --primary-dark:#155E75;
+  --magenta:#BE185D;
+  --ok:#166534;
+  --warn:#A35200;
+  --danger:#C81E1E;
+  --border:#E2E8F0;
+  --border-strong:#CBD5E1;
+  --border-input:#7D8DA3;
+  --shadow-card:0 1px 2px rgba(15,23,42,.06), 0 4px 14px rgba(15,23,42,.06);
+  --glow-cyan:0 0 0 1px rgba(14,116,144,.25), 0 4px 12px rgba(14,116,144,.15);
+  --glow-danger:0 0 0 1px rgba(200,30,30,.3), 0 4px 12px rgba(200,30,30,.15);
+  --scanlines:none;
+  --bg-gradient:linear-gradient(180deg, #EAF1F8 0%, #F4F7FB 40%);
+  --surface-glass:rgba(255,255,255,0.88);
+  --surface-glass-strong:rgba(255,255,255,0.94);
+  --grid-line:rgba(14,116,144,.07);
+  --primary-glow:rgba(14,116,144,.25);
+  --link-hover:#155E75;
+  --on-primary:#FFFFFF;
+  --on-danger:#FFFFFF;
+  --danger-text:#B91C1C;
+  --danger-active:#A51818;
+  --toast-bg:#0F172A;
+  --backdrop:rgba(15,23,42,0.45);
+  --menu-shadow:0 16px 40px rgba(15,23,42,.16);
+  color-scheme:light;
+}
+/* Toast kekal gelap dalam tema cerah — teksnya mesti cerah. */
+:root[data-theme="light"] .toast{color:#F8FAFC;}
+:root[data-theme="light"] .toast-success .icon{color:#4ADE80;}
+:root[data-theme="light"] .toast-error .icon{color:#F87171;}
+:root[data-theme="light"] .toast-info .icon, :root[data-theme="light"] .toast-offline .icon{color:#FBBF24;}
+:root[data-theme="light"] .vehicle-mileage strong{text-shadow:none;}
 
 *{box-sizing:border-box;}
 
@@ -50,13 +112,13 @@
 }
 .conn-status-fixed{justify-content:center;}
 .conn-status:empty{display:none;}
-.brand .icon{color:var(--primary);filter:drop-shadow(0 0 8px rgba(34,211,238,.5));}
+.brand .icon{color:var(--primary);filter:drop-shadow(0 0 8px var(--primary-glow));}
 html,body{margin:0;padding:0;}
 body{
   font-family:var(--font-body);
   font-size:15px;
   background:var(--void);
-  background-image:radial-gradient(120% 70% at 50% -10%, #12213A 0%, #05070E 60%);
+  background-image:var(--bg-gradient);
   background-attachment:fixed;
   color:var(--text);
   min-height:100vh;
@@ -64,13 +126,13 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 a{color:var(--primary);text-decoration:none;}
-a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
+a:hover{color:var(--link-hover);}
 ::selection{background:rgba(34,211,238,.3);}
 
 /* ---------- top chrome ---------- */
 .topbar{
   position:sticky;top:0;z-index:10;
-  background:rgba(8,13,24,0.86);
+  background:var(--surface-glass);
   backdrop-filter:blur(10px);
   border-bottom:1px solid var(--border);
   box-shadow:0 1px 0 rgba(34,211,238,.14);
@@ -86,12 +148,54 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
   min-width:0;
 }
 .brand-text{overflow:hidden;text-overflow:ellipsis;}
-.topbar-user{flex-shrink:0;}
-/* Skrin sempit: Log Keluar jadi butang ikon (nama kekal melalui aria-label). */
-@media (max-width:479px){
-  .btn-signout{width:44px;padding:0;}
-  .btn-signout-text{display:none;}
+
+/* ---------- menu hamburger ---------- */
+.menu-wrap{position:relative;flex-shrink:0;}
+.btn-icon{width:44px;padding:0;}
+.app-menu{
+  position:absolute;right:0;top:calc(100% + 8px);z-index:60;
+  width:min(280px, calc(100vw - 32px));
+  background:var(--bg-modal);
+  border:1px solid var(--border-strong);border-radius:var(--radius);
+  box-shadow:var(--menu-shadow);
+  padding:8px;display:flex;flex-direction:column;gap:4px;
 }
+.app-menu[hidden]{display:none;}
+.menu-user{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px 10px;margin-bottom:4px;border-bottom:1px solid var(--border);
+  font-size:13px;color:var(--text-dim);
+  overflow:hidden;white-space:nowrap;
+}
+.menu-user span:last-child{overflow:hidden;text-overflow:ellipsis;}
+.menu-item{
+  display:flex;align-items:center;gap:10px;width:100%;min-height:44px;
+  padding:0 10px;border:0;border-radius:10px;background:transparent;
+  color:var(--text);font-family:var(--font-display);font-size:14px;font-weight:600;
+  text-align:left;cursor:pointer;
+}
+.menu-item:hover{background:var(--bg-card-2);}
+.menu-item:focus-visible, .segmented button:focus-visible, .btn-icon:focus-visible{
+  outline:2px solid var(--primary);outline-offset:2px;
+}
+.menu-item-danger{color:var(--danger);}
+.menu-group{padding:6px 10px 8px;border-top:1px solid var(--border);}
+.menu-label{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  font-family:var(--font-display);font-size:12px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--text-faint);
+}
+.segmented{
+  display:flex;gap:4px;padding:3px;border-radius:12px;
+  background:var(--bg-sunken);border:1px solid var(--border-strong);
+}
+.segmented button{
+  flex:1;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:0;border-radius:9px;background:transparent;color:var(--text-dim);
+  font-family:var(--font-display);font-size:13px;font-weight:600;cursor:pointer;
+}
+.segmented button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);}
+.signed-out-prefs{margin-top:20px;}
 .main{max-width:640px;margin:0 auto;padding:16px 16px 100px;}
 
 .conn-status{
@@ -103,7 +207,7 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .conn-status-fixed{
   position:fixed;top:0;left:0;right:0;z-index:50;
   padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top));
-  background:rgba(8,13,24,0.9);text-align:center;margin:0;
+  background:var(--surface-glass-strong);text-align:center;margin:0;
   backdrop-filter:blur(10px);border-bottom:1px solid var(--border);
 }
 .err-link{color:var(--primary);word-break:break-all;}
@@ -113,12 +217,12 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
   min-height:100vh;display:flex;align-items:center;justify-content:center;
   padding:24px;padding-top:60px;
   background-image:
-    linear-gradient(rgba(34,211,238,.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34,211,238,.05) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size:100% 28px, 28px 100%;
 }
 .signed-out-card{max-width:360px;text-align:center;}
-.signed-out-logo{margin-bottom:8px;color:var(--primary);filter:drop-shadow(0 0 30px rgba(34,211,238,.5));}
+.signed-out-logo{margin-bottom:8px;color:var(--primary);filter:drop-shadow(0 0 30px var(--primary-glow));}
 .signed-out-card h1{
   font-family:var(--font-display);font-size:28px;font-weight:700;
   text-transform:uppercase;letter-spacing:.03em;margin:0 0 12px;
@@ -126,15 +230,12 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .signed-out-card p{color:var(--text-dim);font-size:14.5px;line-height:1.6;margin-bottom:24px;}
 
 .btn-google{
-  background:#fff;color:#1f2937;font-family:var(--font-body);
+  background:#fff;color:#1f2937;border-color:#CBD5E1;font-family:var(--font-body);
   display:inline-flex;align-items:center;justify-content:center;gap:10px;
   width:100%;padding:14px 16px;font-size:15px;
 }
 .btn-google:active{background:#f3f4f6;transform:scale(0.98);}
 
-.topbar-user{display:flex;align-items:center;gap:8px;}
-.user-email{font-size:12px;color:var(--text-faint);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
-@media (min-width:480px){.user-email{display:inline-block;}}
 
 /* ---------- vehicle cards ---------- */
 .vehicle-list{display:flex;flex-direction:column;gap:14px;}
@@ -179,7 +280,7 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .vehicle-mileage{font-size:13px;color:var(--text-faint);margin-top:10px;}
 .vehicle-mileage strong{
   font-family:var(--font-mono);font-size:17px;color:var(--primary);
-  text-shadow:0 0 12px rgba(34,211,238,.55);
+  text-shadow:0 0 12px var(--primary-glow);
 }
 .vehicle-roadtax{font-size:12.5px;color:var(--text-faint);margin-top:4px;}
 
@@ -262,20 +363,22 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
   transition:background .16s ease, box-shadow .16s ease, transform .1s cubic-bezier(.22,.61,.36,1);
 }
 .btn:active{transform:scale(0.98);}
-.btn-primary{background:var(--primary);color:#00212F;box-shadow:var(--glow-cyan);}
+.btn-primary{background:var(--primary);color:var(--on-primary);box-shadow:var(--glow-cyan);}
 .btn-primary:active{background:var(--primary-dark);}
 .btn-secondary{background:var(--bg-card-2);color:var(--text);border-color:var(--border-strong);}
 .btn-sm{padding:8px 12px;min-height:44px;font-size:13px;} /* sasaran sentuh 44px */
 .btn-link{background:none;color:var(--primary);padding:8px 4px;min-height:44px;font-size:14px;}
 .btn-outline{background:transparent;border:1px solid var(--border-strong);color:var(--text);}
-.btn-danger{background:var(--danger);color:#150204;box-shadow:var(--glow-danger);}
-.btn-danger:active{background:#C4303C;}
+.btn-danger{background:var(--danger);color:var(--on-danger);box-shadow:var(--glow-danger);}
+.btn-danger:active{background:var(--danger-active);}
 .btn:disabled{opacity:.42;cursor:not-allowed;box-shadow:none;}
 
 /* ---------- destructive ---------- */
 .modal-danger{border:1px solid rgba(255,71,87,0.45);}
 .modal-danger h3{color:var(--danger);}
 .danger-text{font-size:14px;line-height:1.6;color:var(--text-dim);margin:10px 0 4px;}
+.modal-note{font-size:14px;line-height:1.6;color:var(--text-dim);margin:0 0 4px;}
+.detail-actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;}
 
 /* ---------- interval editor ---------- */
 .interval-form{display:flex;flex-direction:column;gap:14px;margin-top:6px;}
@@ -322,9 +425,9 @@ dialog.modal-overlay{
   overflow:visible;
 }
 dialog.modal-overlay[open]{display:flex;align-items:flex-end;justify-content:center;}
-dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur(2px);}
+dialog.modal-overlay::backdrop{background:var(--backdrop);backdrop-filter:blur(2px);}
 .modal{
-  background:var(--bg-card-2);
+  background:var(--bg-modal);
   width:100%;max-width:480px;
   border-radius:20px 20px 0 0;
   border-top:1px solid rgba(34,211,238,.45);
@@ -356,7 +459,7 @@ dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur
   border-color:var(--danger);box-shadow:var(--glow-danger);
 }
 .field-error{
-  font-size:13px;color:#FF8A94;margin-top:6px;line-height:1.4;
+  font-size:13px;color:var(--danger-text);margin-top:6px;line-height:1.4;
 }
 .field-error{display:flex;align-items:flex-start;gap:6px;}
 .field-error .icon{margin-top:2px;}
@@ -367,7 +470,7 @@ dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur
 .toast{
   position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;
   transform:translateX(-50%) translateY(20px);
-  background:#080D18;color:var(--text);padding:10px 18px;border-radius:10px;
+  background:var(--toast-bg);color:var(--text);padding:10px 18px;border-radius:10px;
   font-size:13.5px;opacity:0;pointer-events:none;
   transition:all .25s cubic-bezier(.22,.61,.36,1);z-index:200;
   border:1px solid rgba(34,211,238,.45);box-shadow:var(--glow-cyan);
