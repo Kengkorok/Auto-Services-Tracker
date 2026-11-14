@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Servis Tracker</title>
 <meta name="theme-color" content="#05070E">
+<!-- Tetapkan tema seawal mungkin supaya tiada kelipan (asal: gelap). -->
+<script>try{if(localStorage.getItem("theme")==="light")document.documentElement.dataset.theme="light";}catch(e){}</script>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18,18 +20,24 @@
 </head>
 <body>
 
-<div id="connStatus" class="conn-status conn-status-fixed" role="status" aria-live="polite">Menyambung...</div>
+<div id="connStatus" class="conn-status conn-status-fixed" role="status" aria-live="polite" data-i18n="conn.connecting">Menyambung…</div>
 
-<!-- Signed-out screen: Google Sign-In -->
+<!-- Skrin log masuk -->
 <div id="signedOutView" class="signed-out-view">
   <div class="signed-out-card">
     <div class="signed-out-logo"><span data-icon="wrench" data-icon-size="56"></span></div>
-    <h1>Servis Tracker</h1>
-    <p>Track servis minyak hitam &amp; maintenance kenderaan anda. Log masuk dengan akaun Google untuk akses data anda dari mana-mana device.</p>
+    <h1 data-i18n="app.name">Servis Tracker</h1>
+    <p data-i18n="signin.desc">Jejak servis minyak enjin dan penyelenggaraan kenderaan anda.</p>
     <button class="btn btn-google" onclick="signInGoogle()">
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.7-.4-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16.3 3 9.7 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.6C29.6 36 26.9 37 24 37c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 40.6 16.3 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.4l6.6 5.6C41.5 36.1 45 30.6 45 24c0-1.4-.1-2.7-.4-3.5z"/></svg>
-      Log masuk dengan Google
+      <span data-i18n="signin.button">Log masuk dengan Google</span>
     </button>
+    <div class="signed-out-prefs">
+      <div class="segmented" role="group" aria-label="Language / Bahasa">
+        <button type="button" data-lang-option="ms" lang="ms" onclick="setLang('ms')">Bahasa Melayu</button>
+        <button type="button" data-lang-option="en" lang="en" onclick="setLang('en')">English</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -37,11 +45,40 @@
 
   <header class="topbar">
     <div class="topbar-inner">
-      <span class="brand"><span data-icon="wrench" data-icon-size="20"></span><span class="brand-text">Servis Tracker</span></span>
-      <div class="topbar-user">
-        <span id="userEmail" class="user-email"></span>
-        <button class="btn btn-secondary btn-sm btn-signout" onclick="signOutUser()" aria-label="Log Keluar"><span data-icon="log-out"></span><span class="btn-signout-text">Log Keluar</span></button>
-        <button id="addVehicleBtn" class="btn btn-primary btn-sm"><span data-icon="plus"></span> Kenderaan</button>
+      <span class="brand"><span data-icon="wrench" data-icon-size="20"></span><span class="brand-text" data-i18n="app.name">Servis Tracker</span></span>
+
+      <!-- Menu hamburger: corak "disclosure" (butang + panel), boleh guna papan kekunci -->
+      <div class="menu-wrap">
+        <button id="menuBtn" type="button" class="btn btn-secondary btn-icon" aria-haspopup="true" aria-expanded="false" aria-controls="appMenu" data-i18n-aria="menu.open" aria-label="Buka menu">
+          <span data-icon="menu" data-icon-size="20"></span>
+        </button>
+        <div id="appMenu" class="app-menu" hidden>
+          <div class="menu-user"><span data-icon="circle-user"></span><span id="userEmail"></span></div>
+
+          <button id="addVehicleBtn" type="button" class="menu-item">
+            <span data-icon="plus"></span><span data-i18n="menu.addVehicle">Tambah Kenderaan</span>
+          </button>
+
+          <div class="menu-group" role="group" aria-labelledby="menuLangLabel">
+            <div class="menu-label" id="menuLangLabel"><span data-icon="languages"></span><span data-i18n="menu.language">Bahasa</span></div>
+            <div class="segmented">
+              <button type="button" data-lang-option="ms" lang="ms" onclick="setLang('ms')">Bahasa Melayu</button>
+              <button type="button" data-lang-option="en" lang="en" onclick="setLang('en')">English</button>
+            </div>
+          </div>
+
+          <div class="menu-group" role="group" aria-labelledby="menuThemeLabel">
+            <div class="menu-label" id="menuThemeLabel"><span data-icon="sun"></span><span data-i18n="menu.theme">Tema</span></div>
+            <div class="segmented">
+              <button type="button" data-theme-option="dark" onclick="setTheme('dark')"><span data-icon="moon" data-icon-size="16"></span><span data-i18n="menu.themeDark">Gelap</span></button>
+              <button type="button" data-theme-option="light" onclick="setTheme('light')"><span data-icon="sun" data-icon-size="16"></span><span data-i18n="menu.themeLight">Cerah</span></button>
+            </div>
+          </div>
+
+          <button type="button" class="menu-item menu-item-danger" onclick="signOutUser()">
+            <span data-icon="log-out"></span><span data-i18n="menu.signOut">Log Keluar</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -49,82 +86,82 @@
   <main id="mainView" class="main">
     <div id="licenseCard" class="license-card" role="button" tabindex="0" onclick="openLicenseModal()" onkeydown="activateOnKey(event)">
       <div class="license-card-top">
-        <span class="license-card-title"><span data-icon="id-card"></span> Lesen Memandu</span>
-        <span id="licenseStatusBadge" class="status-badge status-na">Belum Diisi</span>
+        <span class="license-card-title"><span data-icon="id-card"></span> <span data-i18n="license.title">Lesen Memandu</span></span>
+        <span id="licenseStatusBadge" class="status-badge status-na" data-i18n="license.emptyBadge">Belum Diisi</span>
       </div>
-      <div id="licenseCardBody" class="license-card-body">Tap untuk tambah kelas lesen anda (pilihan)</div>
+      <div id="licenseCardBody" class="license-card-body" data-i18n="license.emptyBody">Ketik untuk menambah kelas lesen anda (pilihan)</div>
     </div>
 
     <div id="vehicleList" class="vehicle-list"></div>
     <div id="emptyState" class="empty-state" style="display:none;">
-      <p>Belum ada kenderaan didaftarkan.</p>
-      <button class="btn btn-primary" onclick="openAddVehicleModal()"><span data-icon="plus"></span> Daftar Kenderaan Pertama</button>
+      <p data-i18n="empty.text">Belum ada kenderaan didaftarkan.</p>
+      <button class="btn btn-primary" onclick="openAddVehicleModal()"><span data-icon="plus"></span> <span data-i18n="empty.cta">Daftar Kenderaan Pertama</span></button>
     </div>
   </main>
 
-  <!-- Vehicle Detail View -->
+  <!-- Paparan butiran kenderaan -->
   <main id="detailView" class="main" style="display:none;">
-    <button class="btn btn-link" onclick="closeDetailView()"><span data-icon="arrow-left"></span> Kembali</button>
+    <button class="btn btn-link" onclick="closeDetailView()"><span data-icon="arrow-left"></span> <span data-i18n="nav.back">Kembali</span></button>
     <div id="detailContent"></div>
   </main>
 
 </div>
 
-<!-- Modal: Add Vehicle -->
+<!-- Modal: Daftar Kenderaan -->
 <dialog id="addVehicleModal" class="modal-overlay" aria-labelledby="addVehicleModalTitle">
   <div class="modal">
-    <h3 id="addVehicleModalTitle">Daftar Kenderaan</h3>
-    <label for="newVehicleType">Jenis Kenderaan</label>
+    <h3 id="addVehicleModalTitle" data-i18n="add.title">Daftar Kenderaan</h3>
+    <label for="newVehicleType" data-i18n="add.type">Jenis Kenderaan</label>
     <select id="newVehicleType"></select>
 
-    <label for="newVehicleName">Nama Kenderaan (pilihan)</label>
-    <input id="newVehicleName" type="text" placeholder="cth: Kereta buruk Kancil, Kereta sewa Lamborghini flex">
+    <label for="newVehicleName" data-i18n="add.name">Nama Kenderaan (pilihan)</label>
+    <input id="newVehicleName" type="text" data-i18n-ph="add.namePh">
 
-    <label for="newVehiclePlate">No. Pendaftaran / Label (pilihan)</label>
-    <input id="newVehiclePlate" type="text" placeholder="Contoh: WXX 1234">
+    <label for="newVehiclePlate" data-i18n="add.plate">No. Pendaftaran (pilihan)</label>
+    <input id="newVehiclePlate" type="text" data-i18n-ph="add.platePh">
 
-    <label for="newVehicleMileage">Mileage Semasa (km)</label>
-    <input id="newVehicleMileage" type="number" inputmode="numeric" placeholder="Contoh: 7000">
+    <label for="newVehicleMileage" data-i18n="add.mileage">Mileage Semasa (km)</label>
+    <input id="newVehicleMileage" type="number" inputmode="numeric" data-i18n-ph="add.mileagePh">
 
-    <label for="newVehicleRoadtax">Tarikh Luput Roadtax (pilihan)</label>
+    <label for="newVehicleRoadtax" data-i18n="add.roadtax">Tarikh Luput Cukai Jalan (pilihan)</label>
     <input id="newVehicleRoadtax" type="date">
 
-    <label for="newVehiclePhotoInput">Gambar Kenderaan (pilihan)</label>
+    <label for="newVehiclePhotoInput" data-i18n="add.photo">Gambar Kenderaan (pilihan)</label>
     <input id="newVehiclePhotoInput" type="file" accept="image/*">
     <div id="newVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
-      <img id="newVehiclePhotoPreview" class="photo-preview" alt="Pratonton gambar kenderaan">
-      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearNewVehiclePhoto()">Buang Gambar</button>
+      <img id="newVehiclePhotoPreview" class="photo-preview" data-i18n-alt="form.photoPreview" alt="">
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearNewVehiclePhoto()" data-i18n="form.removePhoto">Buang Gambar</button>
     </div>
 
-    <div class="section-title" style="margin-top:20px;">Interval Servis (boleh ubah ikut kenderaan anda)</div>
+    <div class="section-title" style="margin-top:20px;" data-i18n="add.intervals">Interval Servis</div>
     <div id="newVehicleIntervals" class="interval-form"></div>
 
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('addVehicleModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitAddVehicle()">Daftar</button>
+      <button class="btn btn-secondary" onclick="closeModal('addVehicleModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitAddVehicle()" data-i18n="add.submit">Daftar</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Edit Kenderaan (nama/plate/gambar/roadtax selepas daftar) -->
+<!-- Modal: Edit Kenderaan -->
 <dialog id="editVehicleModal" class="modal-overlay" aria-labelledby="editVehicleModalTitle">
   <div class="modal">
-    <h3 id="editVehicleModalTitle">Edit Kenderaan</h3>
-    <label for="editVehicleName">Nama Kenderaan (pilihan)</label>
-    <input id="editVehicleName" type="text" placeholder="cth: Kereta buruk Kancil">
-    <label for="editVehiclePlate">No. Pendaftaran / Label (pilihan)</label>
-    <input id="editVehiclePlate" type="text">
-    <label for="editVehicleRoadtax">Tarikh Luput Roadtax (pilihan)</label>
+    <h3 id="editVehicleModalTitle" data-i18n="edit.title">Edit Kenderaan</h3>
+    <label for="editVehicleName" data-i18n="add.name">Nama Kenderaan (pilihan)</label>
+    <input id="editVehicleName" type="text" data-i18n-ph="add.namePh">
+    <label for="editVehiclePlate" data-i18n="add.plate">No. Pendaftaran (pilihan)</label>
+    <input id="editVehiclePlate" type="text" data-i18n-ph="add.platePh">
+    <label for="editVehicleRoadtax" data-i18n="add.roadtax">Tarikh Luput Cukai Jalan (pilihan)</label>
     <input id="editVehicleRoadtax" type="date">
-    <label for="editVehiclePhotoInput">Gambar Kenderaan (pilihan)</label>
+    <label for="editVehiclePhotoInput" data-i18n="add.photo">Gambar Kenderaan (pilihan)</label>
     <input id="editVehiclePhotoInput" type="file" accept="image/*">
     <div id="editVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
-      <img id="editVehiclePhotoPreview" class="photo-preview" alt="Pratonton gambar kenderaan">
-      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearEditVehiclePhoto()">Buang Gambar</button>
+      <img id="editVehiclePhotoPreview" class="photo-preview" data-i18n-alt="form.photoPreview" alt="">
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearEditVehiclePhoto()" data-i18n="form.removePhoto">Buang Gambar</button>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('editVehicleModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitEditVehicle()">Simpan</button>
+      <button class="btn btn-secondary" onclick="closeModal('editVehicleModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitEditVehicle()" data-i18n="form.save">Simpan</button>
     </div>
   </div>
 </dialog>
@@ -132,88 +169,88 @@
 <!-- Modal: Lesen Memandu -->
 <dialog id="licenseModal" class="modal-overlay" aria-labelledby="licenseModalTitle">
   <div class="modal">
-    <h3 id="licenseModalTitle"><span data-icon="id-card" data-icon-size="20"></span> Lesen Memandu</h3>
-    <p class="danger-text" style="color:var(--text-dim);">Pilihan sahaja — tak menjejaskan tracking servis kenderaan anda. Tiada notifikasi automatik, ini sekadar rujukan visual.</p>
+    <h3 id="licenseModalTitle"><span data-icon="id-card" data-icon-size="20"></span> <span data-i18n="license.title">Lesen Memandu</span></h3>
+    <p class="modal-note" data-i18n="license.modalNote">Pilihan sahaja.</p>
     <div id="licenseClassRows" class="interval-form"></div>
-    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()"><span data-icon="plus"></span> Tambah Kelas</button>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()"><span data-icon="plus"></span> <span data-i18n="license.addClass">Tambah Kelas</span></button>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('licenseModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitLicense()">Simpan</button>
+      <button class="btn btn-secondary" onclick="closeModal('licenseModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitLicense()" data-i18n="form.save">Simpan</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Edit Interval (item tunggal) -->
+<!-- Modal: Ubah Interval -->
 <dialog id="editIntervalModal" class="modal-overlay" aria-labelledby="editIntervalTitle">
   <div class="modal">
-    <h3 id="editIntervalTitle">Ubah Interval</h3>
+    <h3 id="editIntervalTitle" data-i18n="editInterval.title">Ubah Interval</h3>
     <div id="editIntervalFields" class="interval-form"></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('editIntervalModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitEditInterval()">Simpan</button>
+      <button class="btn btn-secondary" onclick="closeModal('editIntervalModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitEditInterval()" data-i18n="form.save">Simpan</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Delete Vehicle Confirmation -->
-<dialog id="deleteVehicleModal" class="modal-overlay" aria-labelledby="deleteVehicleModalTitle">
+<!-- Modal: Sahkan padam kenderaan -->
+<dialog id="deleteVehicleModal" class="modal-overlay" aria-labelledby="deleteVehicleModalTitle" aria-describedby="deleteVehicleModalBody">
   <div class="modal modal-danger">
-    <h3 id="deleteVehicleModalTitle"><span data-icon="triangle-alert" data-icon-size="20"></span> Biar betul korang nak padam kenderaan ni?!</h3>
-    <p class="danger-text">Semua rekod servis, mileage dan interval untuk kenderaan ini akan <strong>hilang selama-lamanya</strong> dan tidak boleh dikembalikan. Pastikan betul-betul yakin sebelum teruskan.</p>
+    <h3 id="deleteVehicleModalTitle"><span data-icon="triangle-alert" data-icon-size="20"></span> <span data-i18n="delete.title">Padam kenderaan ini?</span></h3>
+    <p id="deleteVehicleModalBody" class="danger-text" data-i18n="delete.body">Semua rekod akan dipadam secara kekal.</p>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('deleteVehicleModal')">Eh tak jadi, Batal</button>
-      <button class="btn btn-danger" onclick="submitDeleteVehicle()">Ya, Padam Terus</button>
+      <button class="btn btn-secondary" onclick="closeModal('deleteVehicleModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-danger" onclick="submitDeleteVehicle()" data-i18n="delete.confirm">Padam</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Update Mileage -->
+<!-- Modal: Kemas Kini Mileage -->
 <dialog id="updateMileageModal" class="modal-overlay" aria-labelledby="updateMileageModalTitle">
   <div class="modal">
-    <h3 id="updateMileageModalTitle">Kemaskini Mileage</h3>
-    <label for="updateMileageInput">Mileage Semasa (km)</label>
+    <h3 id="updateMileageModalTitle" data-i18n="mileage.title">Kemas Kini Mileage</h3>
+    <label for="updateMileageInput" data-i18n="add.mileage">Mileage Semasa (km)</label>
     <input id="updateMileageInput" type="number" inputmode="numeric">
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('updateMileageModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitUpdateMileage()">Kemaskini</button>
+      <button class="btn btn-secondary" onclick="closeModal('updateMileageModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitUpdateMileage()" data-i18n="mileage.submit">Kemas Kini</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Log Service -->
+<!-- Modal: Log Servis -->
 <dialog id="logServiceModal" class="modal-overlay" aria-labelledby="logServiceTitle">
   <div class="modal">
-    <h3 id="logServiceTitle">Log Servis</h3>
+    <h3 id="logServiceTitle" data-i18n="log.title">Log Servis</h3>
     <div id="oilTypeRow" style="display:none;">
-      <label for="logOilType">Jenis Minyak</label>
+      <label for="logOilType" data-i18n="log.oilType">Jenis Minyak</label>
       <select id="logOilType"></select>
     </div>
-    <label for="logServiceMileage">Mileage Semasa Servis (km)</label>
+    <label for="logServiceMileage" data-i18n="log.mileage">Mileage Semasa Servis (km)</label>
     <input id="logServiceMileage" type="number" inputmode="numeric">
-    <label for="logServiceDate">Tarikh Servis</label>
+    <label for="logServiceDate" data-i18n="log.date">Tarikh Servis</label>
     <input id="logServiceDate" type="date">
-    <label for="logServiceNote">Nota (pilihan)</label>
-    <input id="logServiceNote" type="text" placeholder="cth: bengkel ABC, RM85">
+    <label for="logServiceNote" data-i18n="log.note">Nota (pilihan)</label>
+    <input id="logServiceNote" type="text" data-i18n-ph="log.notePh">
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('logServiceModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitLogService()">Simpan</button>
+      <button class="btn btn-secondary" onclick="closeModal('logServiceModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitLogService()" data-i18n="form.save">Simpan</button>
     </div>
   </div>
 </dialog>
 
-<!-- Modal: Add Custom Item -->
+<!-- Modal: Tambah Item Servis -->
 <dialog id="addCustomItemModal" class="modal-overlay" aria-labelledby="addCustomItemModalTitle">
   <div class="modal">
-    <h3 id="addCustomItemModalTitle">Tambah Item Servis / Modifikasi</h3>
-    <label for="customItemLabel">Nama Item</label>
-    <input id="customItemLabel" type="text" placeholder="Contoh: Tukar Tayar / Modifikasi Lampu">
-    <label for="customItemKm">Interval (km) — kosongkan jika tiada</label>
+    <h3 id="addCustomItemModalTitle" data-i18n="custom.title">Tambah Item Servis</h3>
+    <label for="customItemLabel" data-i18n="custom.name">Nama Item</label>
+    <input id="customItemLabel" type="text" data-i18n-ph="custom.namePh">
+    <label for="customItemKm" data-i18n="custom.km">Interval (km)</label>
     <input id="customItemKm" type="number" inputmode="numeric">
-    <label for="customItemMonths">Interval (bulan) — kosongkan jika tiada</label>
+    <label for="customItemMonths" data-i18n="custom.months">Interval (bulan)</label>
     <input id="customItemMonths" type="number" inputmode="numeric">
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('addCustomItemModal')">Batal</button>
-      <button class="btn btn-primary" onclick="submitAddCustomItem()">Tambah</button>
+      <button class="btn btn-secondary" onclick="closeModal('addCustomItemModal')" data-i18n="form.cancel">Batal</button>
+      <button class="btn btn-primary" onclick="submitAddCustomItem()" data-i18n="custom.submit">Tambah</button>
     </div>
   </div>
 </dialog>
@@ -222,6 +259,7 @@
 
 <script src="firebase-config.js"></script>
 <script src="icons.js"></script>
+<script src="i18n.js"></script>
 <script src="schedules.js"></script>
 <script type="module" src="app.js"></script>
 </body>

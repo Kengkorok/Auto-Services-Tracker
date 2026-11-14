@@ -1,131 +1,207 @@
 // ============================================================
-// Jadual Servis — Interval untuk setiap jenis kenderaan
-// `icon` = nama ikon Lucide (lihat icons.js)
-// Semua nilai boleh diedit dari sini (km / bulan)
+// Jadual Servis — interval default untuk setiap jenis kenderaan
+// Semua nilai boleh diubah oleh pengguna semasa daftar / kemudian (km / bulan).
+// `icon` = nama ikon Lucide (lihat icons.js). Label dwibahasa: { ms, en }.
 // ============================================================
 
+// Nama item servis — dikongsi semua jenis kenderaan.
+const ITEM_LABELS = {
+  engine_oil:  { ms: "Minyak Enjin", en: "Engine Oil" },
+  coolant:     { ms: "Cecair Penyejuk (Coolant)", en: "Coolant" },
+  spark_plug:  { ms: "Palam Pencucuh", en: "Spark Plug" },
+  air_filter:  { ms: "Penapis Udara", en: "Air Filter" },
+  fuel_filter: { ms: "Penapis Bahan Api", en: "Fuel Filter" },
+  brake_fluid: { ms: "Minyak Brek", en: "Brake Fluid" },
+  battery:     { ms: "Bateri", en: "Battery" },
+  cvt_belt:    { ms: "Tali Sawat CVT", en: "CVT Belt" },
+  cvt_set:     { ms: "Set CVT (roller dll.)", en: "CVT Set (rollers etc.)" }
+};
+
+// Bina definisi minyak enjin (label jenis minyak datang dari i18n: oil.semi / oil.fully).
+function oilItem(semi, fully, note) {
+  return {
+    label: ITEM_LABELS.engine_oil,
+    hasOilType: true,
+    oilTypes: { semi, fully },
+    ...(note ? { note } : {})
+  };
+}
+function item(key, km, months, note) {
+  return { label: ITEM_LABELS[key], km, months, ...(note ? { note } : {}) };
+}
+
+const ESTIMATE_NOTE = {
+  ms: "Anggaran umum — semak manual pengeluar kenderaan anda.",
+  en: "General estimate — check your vehicle manufacturer's manual."
+};
+
 const VEHICLE_TYPES = {
-  persona16: {
-    label: "Proton Persona 1.6",
+  // ---------- Jenis yang dipaparkan semasa daftar ----------
+  // Kereta & Van guna nilai template "Kenderaan Lain" asal; Motosikal guna nilai NMAX asal.
+  car: {
+    label: { ms: "Kereta", en: "Car" },
     vehicleClass: "car",
     icon: "car",
     items: {
-      engine_oil: {
-        label: "Minyak Enjin (Minyak Hitam)",
-        hasOilType: true,
-        oilTypes: {
-          semi:  { label: "Semi Sintetik", km: 7000,  months: 6 },
-          fully: { label: "Fully Sintetik", km: 10000, months: 6 }
-        }
-      },
-      coolant:      { label: "Coolant",           km: 27500, months: null },
-      spark_plug:   { label: "Spark Plug (Standard/NGK biasa)", km: 30000, months: null, note: "20k-40k. Kalau guna Iridium boleh sampai 100k — edit di sini." },
-      air_filter:   { label: "Air Filter (Penapis Udara)", km: 12500, months: null },
-      brake_fluid:  { label: "Minyak Brek",       km: 20000, months: 24 },
-      battery:      { label: "Bateri",            km: null,  months: 24 }
+      engine_oil:  oilItem({ km: 5000, months: 6 }, { km: 10000, months: 6 }),
+      coolant:     item("coolant", 27500, null),
+      spark_plug:  item("spark_plug", 20000, null, {
+        ms: "Palam standard 20k–40k km. Palam iridium boleh mencapai 100k km.",
+        en: "Standard plugs 20k–40k km. Iridium plugs can last up to 100k km."
+      }),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
+    }
+  },
+  motorcycle: {
+    label: { ms: "Motosikal", en: "Motorcycle" },
+    vehicleClass: "motor",
+    icon: "motorbike",
+    items: {
+      engine_oil:  oilItem({ km: 2000, months: null }, { km: 2500, months: null }),
+      spark_plug:  item("spark_plug", 9000, null, { ms: "Biasanya 8,000–10,000 km.", en: "Typically 8,000–10,000 km." }),
+      air_filter:  item("air_filter", 12500, null),
+      cvt_belt:    item("cvt_belt", 17500, null, {
+        ms: "Untuk skuter (CVT), biasanya 15,000–20,000 km. Kosongkan interval jika motosikal anda menggunakan rantai.",
+        en: "For scooters (CVT), typically 15,000–20,000 km. Leave the interval blank if your motorcycle uses a chain."
+      }),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
+    }
+  },
+  van: {
+    label: { ms: "Van", en: "Van" },
+    vehicleClass: "van",
+    icon: "truck",
+    items: {
+      engine_oil:  oilItem({ km: 5000, months: 6 }, { km: 10000, months: 6 }),
+      coolant:     item("coolant", 27500, null),
+      spark_plug:  item("spark_plug", 20000, null, {
+        ms: "Untuk enjin petrol sahaja. Kosongkan jika van anda menggunakan diesel.",
+        en: "Petrol engines only. Leave blank if your van runs on diesel."
+      }),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
+    }
+  },
+  lorry: {
+    label: { ms: "Lori", en: "Lorry" },
+    vehicleClass: "lorry",
+    icon: "truck",
+    items: {
+      engine_oil:  oilItem({ km: 10000, months: 6 }, { km: 15000, months: 6 }, ESTIMATE_NOTE),
+      coolant:     item("coolant", 50000, 24, ESTIMATE_NOTE),
+      air_filter:  item("air_filter", 20000, 12, ESTIMATE_NOTE),
+      fuel_filter: item("fuel_filter", 20000, null, ESTIMATE_NOTE),
+      brake_fluid: item("brake_fluid", 40000, 24, ESTIMATE_NOTE),
+      battery:     item("battery", null, 24)
+    }
+  },
+
+  // ---------- Jenis lama (legacy) ----------
+  // Tidak dipaparkan dalam borang daftar lagi, tapi dikekalkan supaya kenderaan
+  // yang dah didaftarkan dengan jenis ini terus berfungsi dengan item & interval asal.
+  persona16: {
+    legacy: true,
+    label: { ms: "Kereta", en: "Car" },
+    vehicleClass: "car",
+    icon: "car",
+    items: {
+      engine_oil:  oilItem({ km: 7000, months: 6 }, { km: 10000, months: 6 }),
+      coolant:     item("coolant", 27500, null),
+      spark_plug:  item("spark_plug", 30000, null, {
+        ms: "20k–40k km. Palam iridium boleh mencapai 100k km.",
+        en: "20k–40k km. Iridium plugs can last up to 100k km."
+      }),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
     }
   },
   nmax155: {
-    label: "Yamaha NMAX 155 V3",
+    legacy: true,
+    label: { ms: "Motosikal", en: "Motorcycle" },
     vehicleClass: "motor",
     icon: "scooter",
     items: {
-      engine_oil: {
-        label: "Minyak Enjin (Minyak Hitam)",
-        hasOilType: true,
-        oilTypes: {
-          semi:  { label: "Semi Sintetik", km: 2000, months: null },
-          fully: { label: "Fully Sintetik", km: 2500, months: null }
-        }
-      },
-      coolant:      { label: "Coolant",             km: 27500, months: null },
-      spark_plug:   { label: "Spark Plug",          km: 9000,  months: null, note: "8,000-10,000km" },
-      cvt_belt:     { label: "CVT / V-Belt",        km: 17500, months: null, note: "15,000-20,000km" },
-      cvt_set:      { label: "CVT Set (roller/dsb)",km: 40000, months: null },
-      air_filter:   { label: "Air Filter (Penapis Udara)", km: 12500, months: null },
-      brake_fluid:  { label: "Minyak Brek",         km: 20000, months: 24 },
-      battery:      { label: "Bateri",              km: null,  months: 24 }
+      engine_oil:  oilItem({ km: 2000, months: null }, { km: 2500, months: null }),
+      coolant:     item("coolant", 27500, null),
+      spark_plug:  item("spark_plug", 9000, null, { ms: "8,000–10,000 km", en: "8,000–10,000 km" }),
+      cvt_belt:    item("cvt_belt", 17500, null, { ms: "15,000–20,000 km", en: "15,000–20,000 km" }),
+      cvt_set:     item("cvt_set", 40000, null),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
     }
   },
   lagenda115fi: {
-    label: "Yamaha Lagenda 115 FI",
+    legacy: true,
+    label: { ms: "Motosikal", en: "Motorcycle" },
     vehicleClass: "motor",
     icon: "scooter",
     items: {
-      engine_oil: {
-        label: "Minyak Enjin (Minyak Hitam)",
-        hasOilType: true,
-        oilTypes: {
-          semi:  { label: "Semi Sintetik", km: 2000, months: null },
-          fully: { label: "Fully Sintetik", km: 2500, months: null }
-        }
-      },
-      // TIADA coolant — Lagenda 115 FI air-cooled (bukan liquid-cooled)
-      spark_plug:   { label: "Spark Plug",          km: 9000,  months: null, note: "8,000-10,000km" },
-      cvt_belt:     { label: "CVT / V-Belt",        km: 17500, months: null, note: "15,000-20,000km" },
-      cvt_set:      { label: "CVT Set (roller/dsb)",km: 40000, months: null },
-      air_filter:   { label: "Air Filter (Penapis Udara)", km: 12500, months: null },
-      brake_fluid:  { label: "Minyak Brek",         km: 20000, months: 24 },
-      battery:      { label: "Bateri",              km: null,  months: 24 }
+      engine_oil:  oilItem({ km: 2000, months: null }, { km: 2500, months: null }),
+      // Tiada coolant — enjin penyejukan udara.
+      spark_plug:  item("spark_plug", 9000, null, { ms: "8,000–10,000 km", en: "8,000–10,000 km" }),
+      cvt_belt:    item("cvt_belt", 17500, null, { ms: "15,000–20,000 km", en: "15,000–20,000 km" }),
+      cvt_set:     item("cvt_set", 40000, null),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
     }
   },
   custom: {
-    label: "Kenderaan Lain (Custom)",
+    legacy: true,
+    label: { ms: "Kereta", en: "Car" },
     vehicleClass: "custom",
     icon: "car-front",
     items: {
-      engine_oil: {
-        label: "Minyak Enjin (Minyak Hitam)",
-        hasOilType: true,
-        oilTypes: {
-          semi:  { label: "Semi Sintetik", km: 5000, months: 6 },
-          fully: { label: "Fully Sintetik", km: 10000, months: 6 }
-        }
-      },
-      coolant:      { label: "Coolant",       km: 27500, months: null },
-      spark_plug:   { label: "Spark Plug",    km: 20000, months: null },
-      air_filter:   { label: "Air Filter",    km: 12500, months: null },
-      brake_fluid:  { label: "Minyak Brek",   km: 20000, months: 24 },
-      battery:      { label: "Bateri",        km: null,  months: 24 }
+      engine_oil:  oilItem({ km: 5000, months: 6 }, { km: 10000, months: 6 }),
+      coolant:     item("coolant", 27500, null),
+      spark_plug:  item("spark_plug", 20000, null),
+      air_filter:  item("air_filter", 12500, null),
+      brake_fluid: item("brake_fluid", 20000, 24),
+      battery:     item("battery", null, 24)
     }
   },
-  // Dua ni sengaja tiada preset — untuk gelak/easter-egg, dan untuk sesiapa yang
-  // ada kenderaan yang betul-betul tak match mana-mana kategori atas. User isi
-  // sendiri sepenuhnya guna "+ Tambah Item" dalam halaman detail kenderaan.
   helikopter: {
-    label: "Helikopter",
+    legacy: true,
+    label: { ms: "Lain-lain", en: "Other" },
     vehicleClass: "other",
     icon: "helicopter",
     items: {}
   },
   basikal: {
-    label: "Basikal",
+    legacy: true,
+    label: { ms: "Lain-lain", en: "Other" },
     vehicleClass: "other",
     icon: "bike",
     items: {}
   }
 };
 
-// Modifikasi lain / servis tambahan yang user boleh tambah manual (bukan berjadual tetap)
+// Item tambahan yang pengguna tambah sendiri (bukan berjadual tetap)
 const FREEFORM_ITEM_KEY = "custom_item";
 
 // ============================================================
-// Kelas Lesen Memandu Rasmi (JPJ Malaysia)
+// Kelas Lesen Memandu (JPJ Malaysia)
 // ============================================================
 const JPJ_LICENSE_CLASSES = [
-  { value: "A",  label: "A — Motosikal roda tiga (dgn container)" },
-  { value: "A1", label: "A1 — Motosikal roda tiga" },
-  { value: "B",  label: "B — Motosikal & sespan (>250cc)" },
-  { value: "B1", label: "B1 — Motosikal tanpa sespan (>250cc)" },
-  { value: "B2", label: "B2 — Motosikal (≤250cc)" },
-  { value: "D",  label: "D — Kereta (Manual)" },
-  { value: "DA", label: "DA — Kereta (Automatik)" },
-  { value: "E",  label: "E — Lori/Trak (Kenderaan Berat)" },
-  { value: "E1", label: "E1 — Lori (GVW Sederhana)" },
-  { value: "E2", label: "E2 — Lori (GVW Ringan, Bukan Automatik)" },
-  { value: "F",  label: "F — Traktor Pertanian" },
-  { value: "G",  label: "G — Jengkaut / Jentera Tanah" },
-  { value: "H",  label: "H — Kenderaan Tentera" },
-  { value: "I",  label: "I — Teksi / Kenderaan Awam (PSV)" },
-  { value: "lain", label: "Lain-lain" }
+  { value: "A",  label: { ms: "A — Motosikal roda tiga (dengan kontena)", en: "A — Three-wheeled motorcycle (with container)" } },
+  { value: "A1", label: { ms: "A1 — Motosikal roda tiga", en: "A1 — Three-wheeled motorcycle" } },
+  { value: "B",  label: { ms: "B — Motosikal dengan sespan (>250cc)", en: "B — Motorcycle with sidecar (>250cc)" } },
+  { value: "B1", label: { ms: "B1 — Motosikal tanpa sespan (>250cc)", en: "B1 — Motorcycle without sidecar (>250cc)" } },
+  { value: "B2", label: { ms: "B2 — Motosikal (≤250cc)", en: "B2 — Motorcycle (≤250cc)" } },
+  { value: "D",  label: { ms: "D — Kereta (manual)", en: "D — Car (manual)" } },
+  { value: "DA", label: { ms: "DA — Kereta (automatik)", en: "DA — Car (automatic)" } },
+  { value: "E",  label: { ms: "E — Lori/trak (kenderaan berat)", en: "E — Lorry/truck (heavy vehicle)" } },
+  { value: "E1", label: { ms: "E1 — Lori (GVW sederhana)", en: "E1 — Lorry (medium GVW)" } },
+  { value: "E2", label: { ms: "E2 — Lori (GVW ringan, bukan automatik)", en: "E2 — Lorry (light GVW, non-automatic)" } },
+  { value: "F",  label: { ms: "F — Traktor pertanian", en: "F — Agricultural tractor" } },
+  { value: "G",  label: { ms: "G — Jengkaut / jentera tanah", en: "G — Excavator / earthmoving machinery" } },
+  { value: "H",  label: { ms: "H — Kenderaan tentera", en: "H — Military vehicle" } },
+  { value: "I",  label: { ms: "I — Teksi / kenderaan awam (PSV)", en: "I — Taxi / public service vehicle (PSV)" } },
+  { value: "lain", label: { ms: "Lain-lain", en: "Other" } }
 ];
