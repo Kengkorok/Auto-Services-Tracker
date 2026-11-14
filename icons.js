@@ -32,7 +32,8 @@ const LUCIDE_ICONS = {
   "moon": "<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>",
   "languages": "<path d=\"m5 8 6 6\"/> <path d=\"m4 14 6-6 2-3\"/> <path d=\"M2 5h12\"/> <path d=\"M7 2h1\"/> <path d=\"m22 22-5-10-5 10\"/> <path d=\"M14 18h6\"/>",
   "circle-user": "<circle cx=\"12\" cy=\"12\" r=\"10\"/> <circle cx=\"12\" cy=\"10\" r=\"3\"/> <path d=\"M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662\"/>",
-  "plus": "<path d=\"M5 12h14\"/> <path d=\"M12 5v14\"/>"
+  "plus": "<path d=\"M5 12h14\"/> <path d=\"M12 5v14\"/>",
+  "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\"/> <path d=\"M12 6v6l4 2\"/>"
 };
 
 // Pulangkan SVG ikon sebagai string. Ikon hiasan (aria-hidden) — teks di sebelahnya

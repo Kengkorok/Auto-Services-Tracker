@@ -1,5 +1,5 @@
 // Servis Tracker - simple offline-cache service worker
-const CACHE_NAME = "servis-tracker-v4";
+const CACHE_NAME = "servis-tracker-v5";
 const ASSETS = [
   "./",
   "./index.html",
