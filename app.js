@@ -202,11 +202,80 @@ function computeDateOnlyStatus(dateStr, warnDays) {
   const statusLabelMap = { ok: "OK", warn: "Due Soon", danger: "Overdue" };
   return { status, statusLabel: statusLabelMap[status], remainingDays };
 }
+// Toast ada role="status" (aria-live) — screen reader umumkan mesejnya.
+// Mesej ralat dibiar lebih lama supaya sempat dibaca.
+let toastTimer = null;
 function showToast(msg) {
   const t = document.getElementById("toast");
+  // Bila <dialog> terbuka, halaman belakang jadi inert dan terlindung oleh backdrop —
+  // jadi toast mesti duduk dalam dialog tu supaya nampak dan diumumkan.
+  const host = document.querySelector("dialog[open]") || document.body;
+  if (t.parentElement !== host) host.appendChild(t);
   t.textContent = msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), msg.startsWith("❌") ? 6000 : 2500);
+}
+
+// ---------- AKSESIBILITI: KAD, MODAL, RALAT MEDAN ----------
+// Elemen bukan-<button> yang ada role="button" kena respon Enter/Space macam butang.
+window.activateOnKey = function (e) {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+};
+
+// Modal ialah <dialog>; showModal() pindahkan fokus ke dalam, perangkap Tab,
+// dan Escape tutup. Kita simpan elemen yang buka modal supaya fokus kembali ke situ.
+const modalReturnFocus = {};
+function openModal(id) {
+  const dlg = document.getElementById(id);
+  clearFieldErrors(dlg);
+  modalReturnFocus[id] = document.activeElement;
+  if (!dlg.open) dlg.showModal();
+}
+window.closeModal = function (id) {
+  const dlg = document.getElementById(id);
+  if (dlg.open) dlg.close();
+};
+document.querySelectorAll("dialog.modal-overlay").forEach((dlg) => {
+  dlg.addEventListener("close", () => {
+    const back = modalReturnFocus[dlg.id];
+    // Detail view dirender semula bila data berubah — kalau butang asal dah tiada, fokus ke tajuk.
+    if (back && back.isConnected) back.focus();
+    else document.querySelector("#detailView h2, #mainView")?.focus?.();
+  });
+});
+
+// Papar ralat di bawah medan yang salah (bukan cuma toast yang hilang sendiri).
+function fieldError(target, msg) {
+  const input = typeof target === "string" ? document.getElementById(target) : target;
+  const dlg = input.closest("dialog") || document;
+  clearFieldErrors(dlg);
+  const errId = (input.id || "field") + "-err";
+  const err = document.createElement("div");
+  err.className = "field-error";
+  err.id = errId;
+  err.textContent = msg;
+  input.insertAdjacentElement("afterend", err);
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", errId);
+  input.focus();
+  input.addEventListener("input", () => clearFieldErrors(dlg), { once: true });
+}
+function clearFieldErrors(scope) {
+  scope.querySelectorAll(".field-error").forEach((el) => el.remove());
+  scope.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+    el.removeAttribute("aria-invalid");
+    el.removeAttribute("aria-describedby");
+  });
+}
+
+// ID unik untuk input yang dijana JS, supaya <label for> boleh sambung.
+let fieldSeq = 0;
+function nextFieldId(prefix) {
+  return `${prefix}-${++fieldSeq}`;
 }
 function typeDef(typeKey) {
   return VEHICLE_TYPES[typeKey] || VEHICLE_TYPES.custom;
@@ -402,31 +471,38 @@ function bindPhotoInput(inputEl, previewImgEl, previewWrapEl, onReady) {
 
 // Bina HTML satu "interval-group" untuk satu item (dipakai di borang daftar & borang ubah interval)
 function renderIntervalGroupHTML(itemKey, def, values) {
+  // Setiap input dapat ID unik + <label for>; setiap kumpulan ada role="group"
+  // supaya screen reader sebut konteks (cth "Minyak Brek, Interval (km)").
+  const field = (labelText, dataField, value, placeholder) => {
+    const id = nextFieldId("iv");
+    return `<div class="interval-field"><label for="${id}">${labelText}</label><input id="${id}" type="number" inputmode="numeric" min="1" data-field="${dataField}" value="${value ?? ""}"${placeholder ? ` placeholder="${placeholder}"` : ""}></div>`;
+  };
   let inner = "";
   if (def.hasOilType) {
-    inner = `
-      <div class="interval-subtitle">Semi Sintetik</div>
-      <div class="interval-row">
-        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="semiKm" value="${values.oilTypes.semi.km ?? ""}"></div>
-        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="semiMonths" value="${values.oilTypes.semi.months ?? ""}"></div>
-      </div>
-      <div class="interval-subtitle">Fully Sintetik</div>
-      <div class="interval-row">
-        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="fullyKm" value="${values.oilTypes.fully.km ?? ""}"></div>
-        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="fullyMonths" value="${values.oilTypes.fully.months ?? ""}"></div>
-      </div>
-    `;
+    const sub = (label, prefix, iv) => {
+      const subId = nextFieldId("ivsub");
+      return `
+      <div role="group" aria-labelledby="${subId}">
+        <div class="interval-subtitle" id="${subId}">${label}</div>
+        <div class="interval-row">
+          ${field("Interval (km)", prefix + "Km", iv.km)}
+          ${field("Interval (bulan)", prefix + "Months", iv.months)}
+        </div>
+      </div>`;
+    };
+    inner = sub("Semi Sintetik", "semi", values.oilTypes.semi) + sub("Fully Sintetik", "fully", values.oilTypes.fully);
   } else {
     inner = `
       <div class="interval-row">
-        <div class="interval-field"><label>Interval (km)</label><input type="number" inputmode="numeric" data-field="km" value="${values.km ?? ""}" placeholder="kosongkan jika tiada"></div>
-        <div class="interval-field"><label>Interval (bulan)</label><input type="number" inputmode="numeric" data-field="months" value="${values.months ?? ""}" placeholder="kosongkan jika tiada"></div>
+        ${field("Interval (km)", "km", values.km, "kosongkan jika tiada")}
+        ${field("Interval (bulan)", "months", values.months, "kosongkan jika tiada")}
       </div>
     `;
   }
+  const titleId = nextFieldId("ivtitle");
   return `
-    <div class="interval-group" data-item-key="${itemKey}">
-      <div class="interval-group-title">${def.label}</div>
+    <div class="interval-group" data-item-key="${itemKey}" role="group" aria-labelledby="${titleId}">
+      <div class="interval-group-title" id="${titleId}">${def.label}</div>
       ${def.note ? `<div class="interval-group-note">${def.note}</div>` : ""}
       ${inner}
     </div>
@@ -496,7 +572,11 @@ function renderVehicleList() {
 
     const card = document.createElement("div");
     card.className = "vehicle-card";
+    card.setAttribute("role", "button");
+    card.dataset.id = v.id;
+    card.tabIndex = 0;
     card.onclick = () => openDetailView(v.id);
+    card.onkeydown = activateOnKey;
     card.innerHTML = `
       <div class="vehicle-card-top">
         <div class="vehicle-card-left">
@@ -553,11 +633,16 @@ function openDetailView(id) {
   document.getElementById("mainView").style.display = "none";
   document.getElementById("detailView").style.display = "block";
   renderDetail(id);
+  // Pengguna papan kekunci/screen reader: pindah fokus ke tajuk halaman baru.
+  document.querySelector("#detailContent h2")?.focus();
 }
 window.closeDetailView = function () {
+  const backTo = currentDetailId;
   currentDetailId = null;
   document.getElementById("detailView").style.display = "none";
   document.getElementById("mainView").style.display = "block";
+  // Pulangkan fokus ke kad kenderaan yang dibuka tadi.
+  if (backTo) document.querySelector(`.vehicle-card[data-id="${backTo}"]`)?.focus();
 };
 
 function renderDetail(id) {
@@ -605,7 +690,7 @@ function renderDetail(id) {
     ${photoHtml}
     <div class="detail-header">
       <div>
-        <h2>${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</h2>
+        <h2 tabindex="-1">${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</h2>
         ${hasName ? `<div class="vehicle-subtype">${td.icon} ${td.label}</div>` : ""}
         ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
       </div>
@@ -699,9 +784,6 @@ function renderCustomItemCard(vehicleId, item, s) {
 }
 
 // ---------- MODALS ----------
-window.closeModal = function (id) {
-  document.getElementById(id).style.display = "none";
-};
 
 // Add Vehicle
 let newVehiclePhotoData = null;
@@ -731,7 +813,7 @@ window.openAddVehicleModal = function () {
   sel.onchange = renderForSelected;
   renderForSelected();
 
-  document.getElementById("addVehicleModal").style.display = "flex";
+  openModal("addVehicleModal");
 };
 window.clearNewVehiclePhoto = function () {
   newVehiclePhotoData = null;
@@ -744,7 +826,7 @@ window.submitAddVehicle = async function () {
   const vehicleName = document.getElementById("newVehicleName").value.trim();
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
   const m = readMileage("newVehicleMileage");
-  if (m.error) return showToast(m.error);
+  if (m.error) return fieldError("newVehicleMileage", m.error);
   const mileage = m.value ?? 0;
   const roadtaxExpiry = document.getElementById("newVehicleRoadtax").value || null;
 
@@ -791,7 +873,7 @@ window.openEditVehicleModal = function (vehicleId) {
     previewWrap,
     (dataUrl) => { editVehiclePhotoData = dataUrl; }
   );
-  document.getElementById("editVehicleModal").style.display = "flex";
+  openModal("editVehicleModal");
 };
 window.clearEditVehiclePhoto = function () {
   editVehiclePhotoData = null;
@@ -817,17 +899,19 @@ function licenseClassRowHTML(selectedClass, expiry) {
   const options = JPJ_LICENSE_CLASSES.map((c) =>
     `<option value="${c.value}" ${c.value === selectedClass ? "selected" : ""}>${escapeHtml(c.label)}</option>`
   ).join("");
+  const classId = nextFieldId("lic-class");
+  const expiryId = nextFieldId("lic-expiry");
   return `
     <div class="class-row" data-license-row>
       <div class="interval-field">
-        <label>Kelas Lesen</label>
-        <select data-field="class">${options}</select>
+        <label for="${classId}">Kelas Lesen</label>
+        <select id="${classId}" data-field="class">${options}</select>
       </div>
       <div class="interval-field">
-        <label>Tarikh Luput</label>
-        <input type="date" data-field="expiry" value="${expiry || ""}">
+        <label for="${expiryId}">Tarikh Luput</label>
+        <input id="${expiryId}" type="date" data-field="expiry" value="${expiry || ""}">
       </div>
-      <button type="button" class="class-row-delete" onclick="this.closest('[data-license-row]').remove()">✕</button>
+      <button type="button" class="class-row-delete" aria-label="Padam kelas lesen ini" onclick="this.closest('[data-license-row]').remove()">✕</button>
     </div>
   `;
 }
@@ -835,7 +919,7 @@ window.openLicenseModal = function () {
   const rowsEl = document.getElementById("licenseClassRows");
   const classes = licenseDoc.classes && licenseDoc.classes.length > 0 ? licenseDoc.classes : [{ class: "", expiry: "" }];
   rowsEl.innerHTML = classes.map((c) => licenseClassRowHTML(c.class, c.expiry)).join("");
-  document.getElementById("licenseModal").style.display = "flex";
+  openModal("licenseModal");
 };
 window.addLicenseClassRow = function () {
   const rowsEl = document.getElementById("licenseClassRows");
@@ -867,7 +951,7 @@ window.openEditIntervalModal = function (vehicleId, itemKey) {
   document.getElementById("editIntervalTitle").textContent = "Ubah Interval — " + def.label;
   const container = document.getElementById("editIntervalFields");
   container.innerHTML = renderIntervalGroupHTML(itemKey, def, eff);
-  document.getElementById("editIntervalModal").style.display = "flex";
+  openModal("editIntervalModal");
 };
 window.submitEditInterval = async function () {
   const { vehicleId, itemKey } = editIntervalTarget;
@@ -875,9 +959,9 @@ window.submitEditInterval = async function () {
   const td = typeDef(v.typeKey);
   const container = document.getElementById("editIntervalFields");
   const intervals = collectIntervalsFromForm(container, td.items);
-  const badInterval = Object.values(intervals[itemKey].oilTypes || { x: intervals[itemKey] })
-    .some((iv) => [iv.km, iv.months].some((n) => n != null && (!Number.isFinite(n) || n <= 0)));
-  if (badInterval) return showToast("Interval mesti nombor lebih dari 0 (atau kosongkan)");
+  const badInput = [...container.querySelectorAll("input[data-field]")]
+    .find((el) => el.value !== "" && !(Number(el.value) > 0));
+  if (badInput) return fieldError(badInput, "Interval mesti nombor lebih dari 0 (atau kosongkan)");
   closeModal("editIntervalModal");
   runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
     [`intervals.${itemKey}`]: intervals[itemKey]
@@ -890,12 +974,12 @@ window.openUpdateMileageModal = function (id) {
   mileageTargetId = id;
   const v = vehicles.find((x) => x.id === id);
   document.getElementById("updateMileageInput").value = v?.currentMileage || "";
-  document.getElementById("updateMileageModal").style.display = "flex";
+  openModal("updateMileageModal");
 };
 window.submitUpdateMileage = async function () {
   const m = readMileage("updateMileageInput");
-  if (m.error) return showToast(m.error);
-  if (m.value == null) return showToast("Sila isi mileage semasa");
+  if (m.error) return fieldError("updateMileageInput", m.error);
+  if (m.value == null) return fieldError("updateMileageInput", "Sila isi mileage semasa");
   const v = vehicles.find((x) => x.id === mileageTargetId);
   const current = v?.currentMileage || 0;
   if (m.value < current &&
@@ -931,15 +1015,15 @@ window.openLogServiceModal = function (vehicleId, itemKey, hasOilType, isCustom)
   document.getElementById("logServiceMileage").value = v.currentMileage || "";
   document.getElementById("logServiceDate").value = todayStr();
   document.getElementById("logServiceNote").value = "";
-  document.getElementById("logServiceModal").style.display = "flex";
+  openModal("logServiceModal");
 };
 window.submitLogService = async function () {
   const { vehicleId, itemKey, hasOilType, isCustom } = logTarget;
   const m = readMileage("logServiceMileage");
-  if (m.error) return showToast(m.error);
+  if (m.error) return fieldError("logServiceMileage", m.error);
   const mileage = m.value; // null = tak diisi (OK untuk item yang ikut bulan saja)
   const dateVal = document.getElementById("logServiceDate").value || todayStr();
-  if (dateVal > todayStr()) return showToast("Tarikh servis tak boleh lepas hari ini");
+  if (dateVal > todayStr()) return fieldError("logServiceDate", "Tarikh servis tak boleh lepas hari ini");
   const note = document.getElementById("logServiceNote").value.trim();
   const v = vehicles.find((x) => x.id === vehicleId);
   const oilType = hasOilType ? document.getElementById("logOilType").value : undefined;
@@ -953,7 +1037,7 @@ window.submitLogService = async function () {
     const eff = effectiveInterval(v, itemKey, def);
     needsKm = (def.hasOilType ? eff.oilTypes[oilType]?.km : eff.km) != null;
   }
-  if (needsKm && mileage == null) return showToast("Sila isi mileage masa servis");
+  if (needsKm && mileage == null) return fieldError("logServiceMileage", "Sila isi mileage masa servis — item ni dikira ikut km");
 
   const newCurrent = mileage != null ? Math.max(mileage, v.currentMileage || 0) : (v.currentMileage || 0);
   let update;
@@ -978,16 +1062,15 @@ window.openAddCustomItemModal = function (vehicleId) {
   document.getElementById("customItemLabel").value = "";
   document.getElementById("customItemKm").value = "";
   document.getElementById("customItemMonths").value = "";
-  document.getElementById("addCustomItemModal").style.display = "flex";
+  openModal("addCustomItemModal");
 };
 window.submitAddCustomItem = async function () {
   const label = document.getElementById("customItemLabel").value.trim();
   const km = document.getElementById("customItemKm").value;
   const months = document.getElementById("customItemMonths").value;
-  if (!label) return showToast("Sila isi nama item");
-  if ([km, months].some((s) => s !== "" && !(Number(s) > 0))) {
-    return showToast("Interval mesti nombor lebih dari 0 (atau kosongkan)");
-  }
+  if (!label) return fieldError("customItemLabel", "Sila isi nama item");
+  if (km !== "" && !(Number(km) > 0)) return fieldError("customItemKm", "Interval mesti nombor lebih dari 0 (atau kosongkan)");
+  if (months !== "" && !(Number(months) > 0)) return fieldError("customItemMonths", "Interval mesti nombor lebih dari 0 (atau kosongkan)");
   const v = vehicles.find((x) => x.id === customItemTargetVehicle);
   const newItem = {
     id: "c" + Date.now(),
@@ -1013,7 +1096,7 @@ window.deleteCustomItem = function (vehicleId, itemId) {
 let pendingDeleteVehicleId = null;
 window.confirmDeleteVehicle = function (vehicleId) {
   pendingDeleteVehicleId = vehicleId;
-  document.getElementById("deleteVehicleModal").style.display = "flex";
+  openModal("deleteVehicleModal");
 };
 window.submitDeleteVehicle = async function () {
   if (!pendingDeleteVehicleId) return;

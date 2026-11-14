@@ -137,6 +137,10 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 }
 .vehicle-card:hover{border-color:var(--border-strong);}
 .vehicle-card:active{transform:scale(0.98);}
+.vehicle-card:focus-visible, .license-card:focus-visible, .btn:focus-visible,
+.item-edit-link:focus-visible, .class-row-delete:focus-visible{
+  outline:2px solid var(--primary);outline-offset:3px;
+}
 .vehicle-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 .vehicle-card-left{display:flex;gap:12px;align-items:flex-start;min-width:0;}
 .vehicle-thumb{
@@ -286,11 +290,18 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .empty-state p{margin-bottom:16px;}
 
 /* ---------- sheets ---------- */
-.modal-overlay{
-  position:fixed;inset:0;background:rgba(3,5,10,0.72);
-  backdrop-filter:blur(2px);
-  display:flex;align-items:flex-end;justify-content:center;z-index:100;
+/* Modal guna <dialog> + showModal(): browser urus fokus, Escape dan halang
+   interaksi dengan halaman belakang. Dialog sendiri jadi bekas penuh skrin
+   yang lutsinar; .modal di dalamnya ialah bottom sheet. */
+dialog.modal-overlay{
+  position:fixed;inset:0;
+  width:100%;height:100%;max-width:none;max-height:none;
+  margin:0;padding:0;border:0;
+  background:transparent;color:inherit;
+  overflow:visible;
 }
+dialog.modal-overlay[open]{display:flex;align-items:flex-end;justify-content:center;}
+dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur(2px);}
 .modal{
   background:var(--bg-card-2);
   width:100%;max-width:480px;
@@ -320,6 +331,13 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .modal input:focus, .modal select:focus{
   outline:none;border-color:rgba(34,211,238,.45);box-shadow:var(--glow-cyan);
 }
+.modal input[aria-invalid="true"], .modal select[aria-invalid="true"]{
+  border-color:var(--danger);box-shadow:var(--glow-danger);
+}
+.field-error{
+  font-size:13px;color:#FF8A94;margin-top:6px;line-height:1.4;
+}
+.field-error::before{content:"⚠ ";}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
 .modal-actions .btn{flex:1;}
 

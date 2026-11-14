@@ -18,7 +18,7 @@
 </head>
 <body>
 
-<div id="connStatus" class="conn-status conn-status-fixed">Menyambung...</div>
+<div id="connStatus" class="conn-status conn-status-fixed" role="status" aria-live="polite">Menyambung...</div>
 
 <!-- Signed-out screen: Google Sign-In -->
 <div id="signedOutView" class="signed-out-view">
@@ -47,7 +47,7 @@
   </header>
 
   <main id="mainView" class="main">
-    <div id="licenseCard" class="license-card" onclick="openLicenseModal()">
+    <div id="licenseCard" class="license-card" role="button" tabindex="0" onclick="openLicenseModal()" onkeydown="activateOnKey(event)">
       <div class="license-card-top">
         <span class="license-card-title">🪪 Lesen Memandu</span>
         <span id="licenseStatusBadge" class="status-badge status-na">Belum Diisi</span>
@@ -71,28 +71,28 @@
 </div>
 
 <!-- Modal: Add Vehicle -->
-<div id="addVehicleModal" class="modal-overlay" style="display:none;">
+<dialog id="addVehicleModal" class="modal-overlay" aria-labelledby="addVehicleModalTitle">
   <div class="modal">
-    <h3>Daftar Kenderaan</h3>
-    <label>Jenis Kenderaan</label>
+    <h3 id="addVehicleModalTitle">Daftar Kenderaan</h3>
+    <label for="newVehicleType">Jenis Kenderaan</label>
     <select id="newVehicleType"></select>
 
-    <label>Nama Kenderaan (pilihan)</label>
+    <label for="newVehicleName">Nama Kenderaan (pilihan)</label>
     <input id="newVehicleName" type="text" placeholder="cth: Kereta buruk Kancil, Kereta sewa Lamborghini flex">
 
-    <label>No. Pendaftaran / Label (pilihan)</label>
+    <label for="newVehiclePlate">No. Pendaftaran / Label (pilihan)</label>
     <input id="newVehiclePlate" type="text" placeholder="Contoh: WXX 1234">
 
-    <label>Mileage Semasa (km)</label>
+    <label for="newVehicleMileage">Mileage Semasa (km)</label>
     <input id="newVehicleMileage" type="number" inputmode="numeric" placeholder="Contoh: 7000">
 
-    <label>Tarikh Luput Roadtax (pilihan)</label>
+    <label for="newVehicleRoadtax">Tarikh Luput Roadtax (pilihan)</label>
     <input id="newVehicleRoadtax" type="date">
 
-    <label>Gambar Kenderaan (pilihan)</label>
+    <label for="newVehiclePhotoInput">Gambar Kenderaan (pilihan)</label>
     <input id="newVehiclePhotoInput" type="file" accept="image/*">
     <div id="newVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
-      <img id="newVehiclePhotoPreview" class="photo-preview" alt="Preview">
+      <img id="newVehiclePhotoPreview" class="photo-preview" alt="Pratonton gambar kenderaan">
       <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearNewVehiclePhoto()">Buang Gambar</button>
     </div>
 
@@ -104,22 +104,22 @@
       <button class="btn btn-primary" onclick="submitAddVehicle()">Daftar</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Edit Kenderaan (nama/plate/gambar/roadtax selepas daftar) -->
-<div id="editVehicleModal" class="modal-overlay" style="display:none;">
+<dialog id="editVehicleModal" class="modal-overlay" aria-labelledby="editVehicleModalTitle">
   <div class="modal">
-    <h3>Edit Kenderaan</h3>
-    <label>Nama Kenderaan (pilihan)</label>
+    <h3 id="editVehicleModalTitle">Edit Kenderaan</h3>
+    <label for="editVehicleName">Nama Kenderaan (pilihan)</label>
     <input id="editVehicleName" type="text" placeholder="cth: Kereta buruk Kancil">
-    <label>No. Pendaftaran / Label (pilihan)</label>
+    <label for="editVehiclePlate">No. Pendaftaran / Label (pilihan)</label>
     <input id="editVehiclePlate" type="text">
-    <label>Tarikh Luput Roadtax (pilihan)</label>
+    <label for="editVehicleRoadtax">Tarikh Luput Roadtax (pilihan)</label>
     <input id="editVehicleRoadtax" type="date">
-    <label>Gambar Kenderaan (pilihan)</label>
+    <label for="editVehiclePhotoInput">Gambar Kenderaan (pilihan)</label>
     <input id="editVehiclePhotoInput" type="file" accept="image/*">
     <div id="editVehiclePhotoPreviewWrap" style="display:none;margin-top:8px;">
-      <img id="editVehiclePhotoPreview" class="photo-preview" alt="Preview">
+      <img id="editVehiclePhotoPreview" class="photo-preview" alt="Pratonton gambar kenderaan">
       <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="clearEditVehiclePhoto()">Buang Gambar</button>
     </div>
     <div class="modal-actions">
@@ -127,12 +127,12 @@
       <button class="btn btn-primary" onclick="submitEditVehicle()">Simpan</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Lesen Memandu -->
-<div id="licenseModal" class="modal-overlay" style="display:none;">
+<dialog id="licenseModal" class="modal-overlay" aria-labelledby="licenseModalTitle">
   <div class="modal">
-    <h3>🪪 Lesen Memandu</h3>
+    <h3 id="licenseModalTitle">🪪 Lesen Memandu</h3>
     <p class="danger-text" style="color:var(--text-dim);">Pilihan sahaja — tak menjejaskan tracking servis kenderaan anda. Tiada notifikasi automatik, ini sekadar rujukan visual.</p>
     <div id="licenseClassRows" class="interval-form"></div>
     <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()">+ Tambah Kelas</button>
@@ -141,10 +141,10 @@
       <button class="btn btn-primary" onclick="submitLicense()">Simpan</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Edit Interval (item tunggal) -->
-<div id="editIntervalModal" class="modal-overlay" style="display:none;">
+<dialog id="editIntervalModal" class="modal-overlay" aria-labelledby="editIntervalTitle">
   <div class="modal">
     <h3 id="editIntervalTitle">Ubah Interval</h3>
     <div id="editIntervalFields" class="interval-form"></div>
@@ -153,72 +153,72 @@
       <button class="btn btn-primary" onclick="submitEditInterval()">Simpan</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Delete Vehicle Confirmation -->
-<div id="deleteVehicleModal" class="modal-overlay" style="display:none;">
+<dialog id="deleteVehicleModal" class="modal-overlay" aria-labelledby="deleteVehicleModalTitle">
   <div class="modal modal-danger">
-    <h3>⚠️ Biar betul korang nak padam kenderaan ni?!</h3>
+    <h3 id="deleteVehicleModalTitle">⚠️ Biar betul korang nak padam kenderaan ni?!</h3>
     <p class="danger-text">Semua rekod servis, mileage dan interval untuk kenderaan ini akan <strong>hilang selama-lamanya</strong> dan tidak boleh dikembalikan. Pastikan betul-betul yakin sebelum teruskan.</p>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('deleteVehicleModal')">Eh tak jadi, Batal</button>
       <button class="btn btn-danger" onclick="submitDeleteVehicle()">Ya, Padam Terus</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Update Mileage -->
-<div id="updateMileageModal" class="modal-overlay" style="display:none;">
+<dialog id="updateMileageModal" class="modal-overlay" aria-labelledby="updateMileageModalTitle">
   <div class="modal">
-    <h3>Kemaskini Mileage</h3>
-    <label>Mileage Semasa (km)</label>
+    <h3 id="updateMileageModalTitle">Kemaskini Mileage</h3>
+    <label for="updateMileageInput">Mileage Semasa (km)</label>
     <input id="updateMileageInput" type="number" inputmode="numeric">
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('updateMileageModal')">Batal</button>
       <button class="btn btn-primary" onclick="submitUpdateMileage()">Kemaskini</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Log Service -->
-<div id="logServiceModal" class="modal-overlay" style="display:none;">
+<dialog id="logServiceModal" class="modal-overlay" aria-labelledby="logServiceTitle">
   <div class="modal">
     <h3 id="logServiceTitle">Log Servis</h3>
     <div id="oilTypeRow" style="display:none;">
-      <label>Jenis Minyak</label>
+      <label for="logOilType">Jenis Minyak</label>
       <select id="logOilType"></select>
     </div>
-    <label>Mileage Semasa Servis (km)</label>
+    <label for="logServiceMileage">Mileage Semasa Servis (km)</label>
     <input id="logServiceMileage" type="number" inputmode="numeric">
-    <label>Tarikh Servis</label>
+    <label for="logServiceDate">Tarikh Servis</label>
     <input id="logServiceDate" type="date">
-    <label>Nota (pilihan)</label>
+    <label for="logServiceNote">Nota (pilihan)</label>
     <input id="logServiceNote" type="text" placeholder="cth: bengkel ABC, RM85">
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('logServiceModal')">Batal</button>
       <button class="btn btn-primary" onclick="submitLogService()">Simpan</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <!-- Modal: Add Custom Item -->
-<div id="addCustomItemModal" class="modal-overlay" style="display:none;">
+<dialog id="addCustomItemModal" class="modal-overlay" aria-labelledby="addCustomItemModalTitle">
   <div class="modal">
-    <h3>Tambah Item Servis / Modifikasi</h3>
-    <label>Nama Item</label>
+    <h3 id="addCustomItemModalTitle">Tambah Item Servis / Modifikasi</h3>
+    <label for="customItemLabel">Nama Item</label>
     <input id="customItemLabel" type="text" placeholder="Contoh: Tukar Tayar / Modifikasi Lampu">
-    <label>Interval (km) — kosongkan jika tiada</label>
+    <label for="customItemKm">Interval (km) — kosongkan jika tiada</label>
     <input id="customItemKm" type="number" inputmode="numeric">
-    <label>Interval (bulan) — kosongkan jika tiada</label>
+    <label for="customItemMonths">Interval (bulan) — kosongkan jika tiada</label>
     <input id="customItemMonths" type="number" inputmode="numeric">
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('addCustomItemModal')">Batal</button>
       <button class="btn btn-primary" onclick="submitAddCustomItem()">Tambah</button>
     </div>
   </div>
-</div>
+</dialog>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="firebase-config.js"></script>
 <script src="schedules.js"></script>
