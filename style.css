@@ -316,6 +316,7 @@ a:hover{color:var(--link-hover);}
 .status-warn{background:rgba(255,176,32,0.14);color:var(--warn);}
 .status-danger{background:rgba(255,71,87,0.14);color:var(--danger);}
 .status-na{background:rgba(128,147,172,0.14);color:var(--text-faint);}
+.status-deferred{background:rgba(128,147,172,0.14);color:var(--primary);}
 
 /* ---------- service items ---------- */
 .item-list{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
@@ -328,6 +329,12 @@ a:hover{color:var(--link-hover);}
 }
 .item-card.ok{border-left-color:var(--ok);}
 .item-card.warn{border-left-color:var(--warn);}
+.item-card.deferred{border-left-color:var(--primary);border-left-style:dashed;}
+.defer-note{
+  display:flex;gap:6px;align-items:flex-start;margin-top:6px;
+  font-size:12.5px;color:var(--text-dim);line-height:1.45;
+}
+.defer-note svg{flex-shrink:0;margin-top:2px;color:var(--primary);}
 .item-card.danger{
   border-left-color:var(--danger);
   box-shadow:inset 12px 0 24px -18px var(--danger);
@@ -342,7 +349,7 @@ a:hover{color:var(--link-hover);}
 .next-due-highlight .next-due-sub{font-family:var(--font-mono);font-weight:500;color:var(--text-dim);font-size:12.5px;}
 .item-meta{font-size:12.5px;color:var(--text-dim);margin-top:4px;line-height:1.5;}
 .item-meta strong{font-family:var(--font-mono);color:var(--text);}
-.item-actions{margin-top:10px;display:flex;gap:8px;align-items:center;}
+.item-actions{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 
 .detail-header{
   display:flex;justify-content:space-between;align-items:flex-start;gap:12px;

@@ -6,7 +6,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, deleteField,
   onSnapshot, serverTimestamp, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -196,7 +196,7 @@ function fmtDate(d) {
   return localDate(d).toLocaleDateString(locale(), { year: "numeric", month: "short", day: "numeric" });
 }
 function statusLabel(status) {
-  return t({ ok: "status.ok", warn: "status.warn", danger: "status.danger", na: "status.na" }[status]);
+  return t({ ok: "status.ok", warn: "status.warn", danger: "status.danger", na: "status.na", deferred: "status.deferred" }[status]);
 }
 // "baki 12 hari" / "lewat 3 hari" (dan versi km)
 function daysText(n) {
@@ -370,8 +370,56 @@ function effectiveInterval(vehicle, itemKey, itemDef) {
   };
 }
 
-// Kira status untuk satu item berjadual (bukan custom)
-function computeItemStatus(vehicle, itemKey, itemDef) {
+// ---------- TANGGUH KE SERVIS SETERUSNYA ----------
+// Item yang hampir tiba / lewat boleh ditangguh hingga servis minyak enjin seterusnya.
+// Disimpan dalam serviceLog.<item>.deferred = { untilKm, untilDate, oilLastKm, oilLastDate, setOn }.
+// Tangguh tamat bila: mileage capai untilKm, tarikh capai untilDate, ATAU minyak enjin
+// dilog semula (servis dah berlaku). Log servis item tu sendiri buang rekod tangguh
+// secara automatik sebab entri serviceLog diganti terus.
+const DEFER_ANCHOR = "engine_oil";
+
+// Titik servis minyak enjin seterusnya — sasaran tangguh. null kalau tak boleh dikira.
+function deferAnchor(vehicle) {
+  const def = typeDef(vehicle.typeKey).items[DEFER_ANCHOR];
+  if (!def) return null;
+  const s = computeItemStatus(vehicle, DEFER_ANCHOR, def, true);
+  if (s.status === "na" || s.status === "danger") return null;
+  if (s.nextDueKm == null && s.nextDueDate == null) return null;
+  const log = vehicle.serviceLog?.[DEFER_ANCHOR] || {};
+  return { untilKm: s.nextDueKm, untilDate: s.nextDueDate, oilLastKm: log.lastMileage ?? null, oilLastDate: log.lastDate ?? null };
+}
+
+function isDeferActive(vehicle, d) {
+  if (!d) return false;
+  const oil = vehicle.serviceLog?.[DEFER_ANCHOR] || {};
+  if ((oil.lastMileage ?? null) !== (d.oilLastKm ?? null) || (oil.lastDate ?? null) !== (d.oilLastDate ?? null)) return false;
+  if (d.untilKm != null && (vehicle.currentMileage || 0) >= d.untilKm) return false;
+  if (d.untilDate != null && todayStr() >= d.untilDate) return false;
+  return true;
+}
+
+function canDefer(vehicle, itemKey, s) {
+  return itemKey !== DEFER_ANCHOR && (s.status === "warn" || s.status === "danger") && !!deferAnchor(vehicle);
+}
+
+window.deferItem = function (vehicleId, itemKey) {
+  const v = vehicles.find((x) => x.id === vehicleId);
+  const a = v && deferAnchor(v);
+  if (!a) return;
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
+    [`serviceLog.${itemKey}.deferred`]: { ...a, setOn: todayStr() }
+  }), "toast.deferred", "toast.deferFail");
+};
+
+window.undeferItem = function (vehicleId, itemKey) {
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
+    [`serviceLog.${itemKey}.deferred`]: deleteField()
+  }), "toast.deferCleared", "toast.deferFail");
+};
+
+// Kira status untuk satu item berjadual (bukan custom).
+// ignoreDefer = true → status sebenar tanpa ambil kira tangguh.
+function computeItemStatus(vehicle, itemKey, itemDef, ignoreDefer = false) {
   const log = (vehicle.serviceLog || {})[itemKey];
   const eff = effectiveInterval(vehicle, itemKey, itemDef);
   let intervalKm = itemDef.hasOilType ? null : eff.km;
@@ -420,9 +468,14 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
+  // Tangguh hanya bermakna bila item memang perlu servis; bila status sebenar dah OK, abaikan.
+  const deferred = !ignoreDefer && status !== "ok" && isDeferActive(vehicle, log.deferred) ? log.deferred : null;
+  if (deferred) status = "deferred";
+
   return {
     status,
     statusLabel: statusLabel(status),
+    deferred,
     nextDueKm,
     nextDueDate,
     remainingKm,
@@ -455,7 +508,7 @@ function computeCustomItemStatus(vehicle, item) {
 function worstStatus(vehicle) {
   const td = typeDef(vehicle.typeKey);
   let worst = "na";
-  const rank = { na: -1, ok: 0, warn: 1, danger: 2 };
+  const rank = { na: -1, ok: 0, deferred: 0, warn: 1, danger: 2 };
   Object.entries(td.items).forEach(([key, def]) => {
     const s = computeItemStatus(vehicle, key, def).status;
     if (rank[s] > rank[worst]) worst = s;
@@ -671,7 +724,7 @@ function renderLicenseCard() {
     bodyEl.textContent = t("license.emptyBody");
     return;
   }
-  const rank = { na: -1, ok: 0, warn: 1, danger: 2 };
+  const rank = { na: -1, ok: 0, deferred: 0, warn: 1, danger: 2 };
   let worst = "na";
   classes.forEach((c) => {
     const s = computeDateOnlyStatus(c.expiry).status;
@@ -801,16 +854,28 @@ function renderItemCard(vehicle, key, def, s, log) {
   metaLines.push(`${t("item.interval")}: ${intervalSummaryText(def, eff)}`);
   if (def.note) metaLines.push(`<em>${tr(def.note)}</em>`);
 
+  let deferHtml = "";
+  let deferBtn = "";
+  if (s.deferred) {
+    const when = [s.deferred.untilKm != null ? fmtKm(s.deferred.untilKm) : null, s.deferred.untilDate ? fmtDate(s.deferred.untilDate) : null].filter(Boolean).join(" / ");
+    deferHtml = `<div class="defer-note">${icon("clock", { size: 14 })} <span>${t("item.deferredUntil", { when })}</span></div>`;
+    deferBtn = `<button class="item-edit-link" onclick="undeferItem('${vehicleId}', '${key}')">${t("item.deferUndo")}</button>`;
+  } else if (canDefer(vehicle, key, s)) {
+    deferBtn = `<button class="btn btn-secondary btn-sm" onclick="deferItem('${vehicleId}', '${key}')">${icon("clock", { size: 14 })} ${t("item.defer")}</button>`;
+  }
+
   return `
     <div class="item-card ${s.status}">
       <div class="item-top">
         <span class="item-label">${tr(def.label)}</span>
         <span class="status-badge status-${s.status}">${s.statusLabel}</span>
       </div>
+      ${deferHtml}
       ${nextServiceHtml}
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
         <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">${t("item.log")}</button>
+        ${deferBtn}
         <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} ${t("item.editInterval")}</button>
       </div>
     </div>
