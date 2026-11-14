@@ -15,7 +15,7 @@
   /* text */
   --text:#E8F1FA;
   --text-dim:#A9BBD1;
-  --text-faint:#6F819A;
+  --text-faint:#8093AC; /* 4.9:1+ atas semua latar (WCAG AA) */
   /* accents */
   --primary:#22D3EE;
   --primary-dark:#0891B2;
@@ -27,6 +27,7 @@
   /* structure */
   --border:#1B2637;
   --border-strong:#2A3A54;
+  --border-input:#52688A; /* 3:1+ — sempadan medan mesti nampak (WCAG 1.4.11) */
   --radius:14px;
   /* type */
   --font-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
@@ -40,6 +41,16 @@
 }
 
 *{box-sizing:border-box;}
+
+/* ---------- ikon (Lucide) ---------- */
+.icon{display:inline-block;vertical-align:-0.15em;flex-shrink:0;}
+.brand, .license-card-title, .item-label{display:inline-flex;align-items:center;gap:6px;}
+.vehicle-title, .vehicle-subtype, .vehicle-roadtax, .modal h3, .detail-header h2, .conn-status{
+  display:flex;align-items:center;gap:6px;
+}
+.conn-status-fixed{justify-content:center;}
+.conn-status:empty{display:none;}
+.brand .icon{color:var(--primary);filter:drop-shadow(0 0 8px rgba(34,211,238,.5));}
 html,body{margin:0;padding:0;}
 body{
   font-family:var(--font-body);
@@ -72,6 +83,14 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .brand{
   font-family:var(--font-display);font-size:17px;font-weight:700;
   text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;
+  min-width:0;
+}
+.brand-text{overflow:hidden;text-overflow:ellipsis;}
+.topbar-user{flex-shrink:0;}
+/* Skrin sempit: Log Keluar jadi butang ikon (nama kekal melalui aria-label). */
+@media (max-width:479px){
+  .btn-signout{width:44px;padding:0;}
+  .btn-signout-text{display:none;}
 }
 .main{max-width:640px;margin:0 auto;padding:16px 16px 100px;}
 
@@ -99,7 +118,7 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
   background-size:100% 28px, 28px 100%;
 }
 .signed-out-card{max-width:360px;text-align:center;}
-.signed-out-logo{font-size:56px;margin-bottom:8px;filter:drop-shadow(0 0 30px rgba(34,211,238,.5));}
+.signed-out-logo{margin-bottom:8px;color:var(--primary);filter:drop-shadow(0 0 30px rgba(34,211,238,.5));}
 .signed-out-card h1{
   font-family:var(--font-display);font-size:28px;font-weight:700;
   text-transform:uppercase;letter-spacing:.03em;margin:0 0 12px;
@@ -195,7 +214,7 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .status-ok{background:rgba(59,227,139,0.14);color:var(--ok);}
 .status-warn{background:rgba(255,176,32,0.14);color:var(--warn);}
 .status-danger{background:rgba(255,71,87,0.14);color:var(--danger);}
-.status-na{background:rgba(111,129,154,0.14);color:var(--text-faint);}
+.status-na{background:rgba(128,147,172,0.14);color:var(--text-faint);}
 
 /* ---------- service items ---------- */
 .item-list{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
@@ -246,8 +265,8 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .btn-primary{background:var(--primary);color:#00212F;box-shadow:var(--glow-cyan);}
 .btn-primary:active{background:var(--primary-dark);}
 .btn-secondary{background:var(--bg-card-2);color:var(--text);border-color:var(--border-strong);}
-.btn-sm{padding:8px 12px;min-height:36px;font-size:13px;}
-.btn-link{background:none;color:var(--primary);padding:8px 0;min-height:auto;font-size:14px;}
+.btn-sm{padding:8px 12px;min-height:44px;font-size:13px;} /* sasaran sentuh 44px */
+.btn-link{background:none;color:var(--primary);padding:8px 4px;min-height:44px;font-size:14px;}
 .btn-outline{background:transparent;border:1px solid var(--border-strong);color:var(--text);}
 .btn-danger{background:var(--danger);color:#150204;box-shadow:var(--glow-danger);}
 .btn-danger:active{background:#C4303C;}
@@ -270,19 +289,21 @@ a:hover{color:#67E8F9;text-shadow:0 0 12px rgba(34,211,238,.55);}
 .interval-group-note{font-size:12px;color:var(--text-faint);margin-bottom:8px;font-style:italic;}
 .interval-row{display:flex;gap:10px;}
 .interval-field{flex:1;}
-.interval-field label{margin:0 0 4px;font-size:11px;}
-.interval-field input{padding:9px 10px;font-size:14px;min-height:38px;}
+.interval-field label{margin:0 0 4px;font-size:12px;}
+.interval-field input{padding:9px 10px;font-size:14px;min-height:44px;}
 .interval-subtitle{font-size:12.5px;color:var(--text-dim);margin:10px 0 4px;font-weight:600;}
 .item-edit-link{
-  background:none;border:none;color:var(--primary);font-size:12.5px;
-  padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;
+  background:none;border:none;color:var(--primary);font-size:13px;
+  min-height:44px;padding:0 8px;cursor:pointer;font-family:inherit;text-decoration:underline;
+  display:inline-flex;align-items:center;gap:4px;
 }
 
 .class-row{display:flex;gap:10px;align-items:flex-end;}
 .class-row .interval-field{flex:1;}
 .class-row-delete{
   background:rgba(255,71,87,0.14);color:var(--danger);border:none;
-  border-radius:8px;width:38px;height:38px;flex-shrink:0;cursor:pointer;font-size:16px;
+  border-radius:8px;width:44px;height:44px;flex-shrink:0;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
 }
 
 /* ---------- empty ---------- */
@@ -315,13 +336,13 @@ dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur
   margin:0 0 12px;font-family:var(--font-display);font-size:20px;font-weight:700;
 }
 .modal label{
-  display:block;font-family:var(--font-display);font-size:11px;font-weight:600;
+  display:block;font-family:var(--font-display);font-size:12px;font-weight:600;
   text-transform:uppercase;letter-spacing:.14em;
   color:var(--text-faint);margin:14px 0 6px;
 }
 .modal input, .modal select{
   width:100%;padding:11px 12px;min-height:44px;
-  border-radius:10px;border:1px solid var(--border-strong);
+  border-radius:10px;border:1px solid var(--border-input);
   background:var(--bg-sunken);color:var(--text);
   font-size:15px;font-family:var(--font-body);
 }
@@ -337,7 +358,8 @@ dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur
 .field-error{
   font-size:13px;color:#FF8A94;margin-top:6px;line-height:1.4;
 }
-.field-error::before{content:"⚠ ";}
+.field-error{display:flex;align-items:flex-start;gap:6px;}
+.field-error .icon{margin-top:2px;}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
 .modal-actions .btn{flex:1;}
 
@@ -351,6 +373,12 @@ dialog.modal-overlay::backdrop{background:rgba(3,5,10,0.72);backdrop-filter:blur
   border:1px solid rgba(34,211,238,.45);box-shadow:var(--glow-cyan);
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast{display:flex;align-items:flex-start;gap:8px;max-width:calc(100vw - 32px);}
+.toast .icon{margin-top:1px;}
+.toast-success .icon{color:var(--ok);}
+.toast-error{border-color:rgba(255,71,87,.6);box-shadow:var(--glow-danger);}
+.toast-error .icon{color:var(--danger);}
+.toast-info .icon, .toast-offline .icon{color:var(--warn);}
 
 /* ---------- section eyebrow ---------- */
 .section-title{

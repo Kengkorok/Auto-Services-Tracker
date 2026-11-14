@@ -23,12 +23,12 @@
 <!-- Signed-out screen: Google Sign-In -->
 <div id="signedOutView" class="signed-out-view">
   <div class="signed-out-card">
-    <div class="signed-out-logo">🔧</div>
+    <div class="signed-out-logo"><span data-icon="wrench" data-icon-size="56"></span></div>
     <h1>Servis Tracker</h1>
     <p>Track servis minyak hitam &amp; maintenance kenderaan anda. Log masuk dengan akaun Google untuk akses data anda dari mana-mana device.</p>
     <button class="btn btn-google" onclick="signInGoogle()">
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.7-.4-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16.3 3 9.7 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.6C29.6 36 26.9 37 24 37c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 40.6 16.3 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.4l6.6 5.6C41.5 36.1 45 30.6 45 24c0-1.4-.1-2.7-.4-3.5z"/></svg>
-      Sign in with Google
+      Log masuk dengan Google
     </button>
   </div>
 </div>
@@ -37,11 +37,11 @@
 
   <header class="topbar">
     <div class="topbar-inner">
-      <span class="brand">🔧 Servis Tracker</span>
+      <span class="brand"><span data-icon="wrench" data-icon-size="20"></span><span class="brand-text">Servis Tracker</span></span>
       <div class="topbar-user">
         <span id="userEmail" class="user-email"></span>
-        <button class="btn btn-secondary btn-sm" onclick="signOutUser()">Log Keluar</button>
-        <button id="addVehicleBtn" class="btn btn-primary btn-sm">+ Kenderaan</button>
+        <button class="btn btn-secondary btn-sm btn-signout" onclick="signOutUser()" aria-label="Log Keluar"><span data-icon="log-out"></span><span class="btn-signout-text">Log Keluar</span></button>
+        <button id="addVehicleBtn" class="btn btn-primary btn-sm"><span data-icon="plus"></span> Kenderaan</button>
       </div>
     </div>
   </header>
@@ -49,7 +49,7 @@
   <main id="mainView" class="main">
     <div id="licenseCard" class="license-card" role="button" tabindex="0" onclick="openLicenseModal()" onkeydown="activateOnKey(event)">
       <div class="license-card-top">
-        <span class="license-card-title">🪪 Lesen Memandu</span>
+        <span class="license-card-title"><span data-icon="id-card"></span> Lesen Memandu</span>
         <span id="licenseStatusBadge" class="status-badge status-na">Belum Diisi</span>
       </div>
       <div id="licenseCardBody" class="license-card-body">Tap untuk tambah kelas lesen anda (pilihan)</div>
@@ -58,13 +58,13 @@
     <div id="vehicleList" class="vehicle-list"></div>
     <div id="emptyState" class="empty-state" style="display:none;">
       <p>Belum ada kenderaan didaftarkan.</p>
-      <button class="btn btn-primary" onclick="openAddVehicleModal()">+ Daftar Kenderaan Pertama</button>
+      <button class="btn btn-primary" onclick="openAddVehicleModal()"><span data-icon="plus"></span> Daftar Kenderaan Pertama</button>
     </div>
   </main>
 
   <!-- Vehicle Detail View -->
   <main id="detailView" class="main" style="display:none;">
-    <button class="btn btn-link" onclick="closeDetailView()">&larr; Kembali</button>
+    <button class="btn btn-link" onclick="closeDetailView()"><span data-icon="arrow-left"></span> Kembali</button>
     <div id="detailContent"></div>
   </main>
 
@@ -132,10 +132,10 @@
 <!-- Modal: Lesen Memandu -->
 <dialog id="licenseModal" class="modal-overlay" aria-labelledby="licenseModalTitle">
   <div class="modal">
-    <h3 id="licenseModalTitle">🪪 Lesen Memandu</h3>
+    <h3 id="licenseModalTitle"><span data-icon="id-card" data-icon-size="20"></span> Lesen Memandu</h3>
     <p class="danger-text" style="color:var(--text-dim);">Pilihan sahaja — tak menjejaskan tracking servis kenderaan anda. Tiada notifikasi automatik, ini sekadar rujukan visual.</p>
     <div id="licenseClassRows" class="interval-form"></div>
-    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()">+ Tambah Kelas</button>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="addLicenseClassRow()"><span data-icon="plus"></span> Tambah Kelas</button>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('licenseModal')">Batal</button>
       <button class="btn btn-primary" onclick="submitLicense()">Simpan</button>
@@ -158,7 +158,7 @@
 <!-- Modal: Delete Vehicle Confirmation -->
 <dialog id="deleteVehicleModal" class="modal-overlay" aria-labelledby="deleteVehicleModalTitle">
   <div class="modal modal-danger">
-    <h3 id="deleteVehicleModalTitle">⚠️ Biar betul korang nak padam kenderaan ni?!</h3>
+    <h3 id="deleteVehicleModalTitle"><span data-icon="triangle-alert" data-icon-size="20"></span> Biar betul korang nak padam kenderaan ni?!</h3>
     <p class="danger-text">Semua rekod servis, mileage dan interval untuk kenderaan ini akan <strong>hilang selama-lamanya</strong> dan tidak boleh dikembalikan. Pastikan betul-betul yakin sebelum teruskan.</p>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('deleteVehicleModal')">Eh tak jadi, Batal</button>
@@ -221,6 +221,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="firebase-config.js"></script>
+<script src="icons.js"></script>
 <script src="schedules.js"></script>
 <script type="module" src="app.js"></script>
 </body>

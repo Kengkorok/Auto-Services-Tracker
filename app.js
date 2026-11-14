@@ -36,7 +36,7 @@ function setAuthLoading(msg) {
   connStatusEl.className = "conn-status";
 }
 function setAuthError(err) {
-  connStatusEl.innerHTML = "❌ Ralat: " + linkify(escapeHtml(err.message || String(err)));
+  connStatusEl.innerHTML = icon("circle-x", { size: 14 }) + " Ralat: " + linkify(escapeHtml(err.message || String(err)));
   connStatusEl.className = "conn-status err";
 }
 
@@ -77,7 +77,7 @@ onAuthStateChanged(auth, (user) => {
     signedOutView.style.display = "none";
     appShell.style.display = "block";
     document.getElementById("userEmail").textContent = user.displayName || user.email || "Akaun Google";
-    connStatusEl.innerHTML = "✅ Bersambung — data disegerak automatik";
+    connStatusEl.innerHTML = icon("circle-check", { size: 14 }) + " Bersambung — data disegerak automatik";
     connStatusEl.className = "conn-status ok";
     listenVehicles(user.uid);
     listenLicense(user.uid);
@@ -177,10 +177,11 @@ function readMileage(inputId) {
 // tapi promise cuma selesai bila server sahkan — kalau line lemah/offline, ia boleh
 // tergantung lama. Jadi tutup modal terus, dan beritahu kalau server tolak.
 function runWrite(promise, okMsg, failMsg) {
-  showToast(navigator.onLine ? okMsg : okMsg + " (offline — akan sync bila online)");
+  if (navigator.onLine) showToast(okMsg, "success");
+  else showToast(okMsg + " (offline — akan sync bila online)", "offline");
   return promise.catch((err) => {
     console.error("[ServisTracker] Gagal simpan:", err);
-    showToast("❌ " + failMsg + ": " + (err?.message || err));
+    showToast(failMsg + ": " + (err?.message || err), "error");
   });
 }
 function fmtKm(n) {
@@ -199,22 +200,24 @@ function computeDateOnlyStatus(dateStr, warnDays) {
   let status = "ok";
   if (remainingDays <= 0) status = "danger";
   else if (remainingDays <= (warnDays ?? 30)) status = "warn";
-  const statusLabelMap = { ok: "OK", warn: "Due Soon", danger: "Overdue" };
+  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
   return { status, statusLabel: statusLabelMap[status], remainingDays };
 }
 // Toast ada role="status" (aria-live) — screen reader umumkan mesejnya.
 // Mesej ralat dibiar lebih lama supaya sempat dibaca.
+// type: "success" | "error" | "info" | "offline" — tentukan ikon dan warna.
+const TOAST_ICONS = { success: "circle-check", error: "circle-x", info: "circle-alert", offline: "circle-alert" };
 let toastTimer = null;
-function showToast(msg) {
+function showToast(msg, type = "info") {
   const t = document.getElementById("toast");
   // Bila <dialog> terbuka, halaman belakang jadi inert dan terlindung oleh backdrop —
   // jadi toast mesti duduk dalam dialog tu supaya nampak dan diumumkan.
   const host = document.querySelector("dialog[open]") || document.body;
   if (t.parentElement !== host) host.appendChild(t);
-  t.textContent = msg;
-  t.classList.add("show");
+  t.innerHTML = icon(TOAST_ICONS[type] || TOAST_ICONS.info, { size: 16 }) + `<span>${escapeHtml(msg)}</span>`;
+  t.className = "toast toast-" + type + " show";
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), msg.startsWith("❌") ? 6000 : 2500);
+  toastTimer = setTimeout(() => t.classList.remove("show"), type === "error" ? 6000 : 2500);
 }
 
 // ---------- AKSESIBILITI: KAD, MODAL, RALAT MEDAN ----------
@@ -257,7 +260,7 @@ function fieldError(target, msg) {
   const err = document.createElement("div");
   err.className = "field-error";
   err.id = errId;
-  err.textContent = msg;
+  err.innerHTML = icon("circle-alert", { size: 14 }) + `<span>${escapeHtml(msg)}</span>`;
   input.insertAdjacentElement("afterend", err);
   input.setAttribute("aria-invalid", "true");
   input.setAttribute("aria-describedby", errId);
@@ -354,7 +357,7 @@ function computeItemStatus(vehicle, itemKey, itemDef) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
-  const statusLabelMap = { ok: "OK", warn: "Due Soon", danger: "Overdue" };
+  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
 
   return {
     status,
@@ -385,7 +388,7 @@ function computeCustomItemStatus(vehicle, item) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
-  const statusLabelMap = { ok: "OK", warn: "Due Soon", danger: "Overdue" };
+  const statusLabelMap = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat" };
   return { status, statusLabel: statusLabelMap[status], nextDueKm, nextDueDate, remainingKm, remainingDays };
 }
 
@@ -463,7 +466,7 @@ function bindPhotoInput(inputEl, previewImgEl, previewWrapEl, onReady) {
       previewWrapEl.style.display = "block";
       onReady(dataUrl);
     } catch (err) {
-      showToast(PHOTO_TOO_BIG_MSG);
+      showToast(PHOTO_TOO_BIG_MSG, "error");
       inputEl.value = "";
     }
   };
@@ -560,14 +563,14 @@ function renderVehicleList() {
     const td = typeDef(v.typeKey);
     const status = worstStatus(v);
     const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[status];
-    const badgeLabel = { ok: "OK", warn: "Due Soon", danger: "Overdue", na: "Belum Log" }[status];
+    const badgeLabel = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat", na: "Belum Log" }[status];
 
     const hasName = !!v.vehicleName;
     const thumbHtml = v.photoBase64 ? `<img src="${v.photoBase64}" class="vehicle-thumb" alt="">` : "";
     let roadtaxLine = "";
     if (v.roadtaxExpiry) {
       const rs = computeDateOnlyStatus(v.roadtaxExpiry);
-      roadtaxLine = `<div class="vehicle-roadtax">🪪 Roadtax: ${fmtDate(v.roadtaxExpiry)} (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})</div>`;
+      roadtaxLine = `<div class="vehicle-roadtax">${icon("id-card", { size: 14 })} Roadtax: ${fmtDate(v.roadtaxExpiry)} (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})</div>`;
     }
 
     const card = document.createElement("div");
@@ -582,8 +585,8 @@ function renderVehicleList() {
         <div class="vehicle-card-left">
           ${thumbHtml}
           <div style="min-width:0;">
-            <div class="vehicle-title">${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</div>
-            ${hasName ? `<div class="vehicle-subtype">${td.icon} ${td.label}</div>` : ""}
+            <div class="vehicle-title">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon) + " " + td.label}</div>
+            ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${td.label}</div>` : ""}
             ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
           </div>
         </div>
@@ -616,7 +619,7 @@ function renderLicenseCard() {
     if (rank[s] > rank[worst]) worst = s;
   });
   const badgeClass = { ok: "status-ok", warn: "status-warn", danger: "status-danger", na: "status-na" }[worst];
-  const badgeLabel = { ok: "OK", warn: "Due Soon", danger: "Overdue", na: "-" }[worst];
+  const badgeLabel = { ok: "OK", warn: "Hampir Tiba", danger: "Lewat", na: "-" }[worst];
   badgeEl.className = "status-badge " + badgeClass;
   badgeEl.textContent = badgeLabel;
   bodyEl.innerHTML = classes.map((c) => {
@@ -654,7 +657,7 @@ function renderDetail(id) {
   const itemKeys = Object.keys(td.items);
   let itemsHtml = "";
   if (itemKeys.length === 0) {
-    itemsHtml = `<div class="item-meta" style="padding:4px 0 12px;">Kenderaan jenis ni takde jadual servis standard — guna "+ Tambah Item" di bawah untuk mula tracking sendiri 🙂</div>`;
+    itemsHtml = `<div class="item-meta" style="padding:4px 0 12px;">Kenderaan jenis ni takde jadual servis standard — guna "+ Tambah Item" di bawah untuk mula tracking sendiri.</div>`;
   } else {
     itemKeys.forEach((key) => {
       const def = td.items[key];
@@ -668,12 +671,12 @@ function renderDetail(id) {
   const roadtaxHtml = `
     <div class="item-card ${rs.status}">
       <div class="item-top">
-        <span class="item-label">🪪 Roadtax</span>
+        <span class="item-label">${icon("id-card")} Roadtax</span>
         <span class="status-badge status-${rs.status}">${rs.statusLabel}</span>
       </div>
       <div class="item-meta">${v.roadtaxExpiry
         ? `Luput: <strong>${fmtDate(v.roadtaxExpiry)}</strong> (${rs.remainingDays >= 0 ? "baki " + rs.remainingDays + " hari" : "lebih " + Math.abs(rs.remainingDays) + " hari"})`
-        : `Belum diisi — tekan "✎ Edit Kenderaan" untuk tambah tarikh luput.`}</div>
+        : `Belum diisi — tekan "Edit Kenderaan" untuk tambah tarikh luput.`}</div>
     </div>
   `;
 
@@ -690,13 +693,13 @@ function renderDetail(id) {
     ${photoHtml}
     <div class="detail-header">
       <div>
-        <h2 tabindex="-1">${hasName ? escapeHtml(v.vehicleName) : td.icon + " " + td.label}</h2>
-        ${hasName ? `<div class="vehicle-subtype">${td.icon} ${td.label}</div>` : ""}
+        <h2 tabindex="-1">${hasName ? escapeHtml(v.vehicleName) : icon(td.icon, { size: 22 }) + " " + td.label}</h2>
+        ${hasName ? `<div class="vehicle-subtype">${icon(td.icon, { size: 14 })} ${td.label}</div>` : ""}
         ${v.plateNo ? `<div class="vehicle-plate">${escapeHtml(v.plateNo)}</div>` : ""}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
         <button class="btn btn-outline btn-sm" onclick="openUpdateMileageModal('${v.id}')">Kemaskini Mileage</button>
-        <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">✎ Edit Kenderaan</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">${icon("pencil", { size: 14 })} Edit Kenderaan</button>
       </div>
     </div>
     <div class="vehicle-mileage">Mileage semasa: <strong>${fmtKm(v.currentMileage)}</strong></div>
@@ -710,7 +713,7 @@ function renderDetail(id) {
     <div class="section-title">Item Tambahan / Modifikasi</div>
     <div class="item-list">${customHtml}</div>
     <div style="margin-top:12px;">
-      <button class="btn btn-secondary btn-sm" onclick="openAddCustomItemModal('${v.id}')">+ Tambah Item</button>
+      <button class="btn btn-secondary btn-sm" onclick="openAddCustomItemModal('${v.id}')">${icon("plus", { size: 16 })} Tambah Item</button>
       <button class="btn btn-danger btn-sm" onclick="confirmDeleteVehicle('${v.id}')">Padam Kenderaan Ini</button>
     </div>
   `;
@@ -754,7 +757,7 @@ function renderItemCard(vehicle, key, def, s, log) {
       <div class="item-meta">${metaLines.join("<br>")}</div>
       <div class="item-actions">
         <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">Log Servis</button>
-        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">✎ Ubah Interval</button>
+        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} Ubah Interval</button>
       </div>
     </div>
   `;
@@ -790,7 +793,7 @@ let newVehiclePhotoData = null;
 document.getElementById("addVehicleBtn").onclick = () => openAddVehicleModal();
 window.openAddVehicleModal = function () {
   const sel = document.getElementById("newVehicleType");
-  sel.innerHTML = Object.entries(VEHICLE_TYPES).map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join("");
+  sel.innerHTML = Object.entries(VEHICLE_TYPES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
   document.getElementById("newVehicleName").value = "";
   document.getElementById("newVehiclePlate").value = "";
   document.getElementById("newVehicleMileage").value = "";
@@ -821,7 +824,7 @@ window.clearNewVehiclePhoto = function () {
   document.getElementById("newVehiclePhotoPreviewWrap").style.display = "none";
 };
 window.submitAddVehicle = async function () {
-  if (!currentUid) return showToast("Sila log masuk dahulu");
+  if (!currentUid) return showToast("Sila log masuk dahulu", "error");
   const typeKey = document.getElementById("newVehicleType").value;
   const vehicleName = document.getElementById("newVehicleName").value.trim();
   const plateNo = document.getElementById("newVehiclePlate").value.trim();
@@ -844,7 +847,7 @@ window.submitAddVehicle = async function () {
     createdAt: serverTimestamp()
   };
   closeModal("addVehicleModal");
-  runWrite(addDoc(collection(db, "vehicles"), payload), "Kenderaan didaftarkan ✅", "Gagal daftar");
+  runWrite(addDoc(collection(db, "vehicles"), payload), "Kenderaan didaftarkan ", "Gagal daftar");
 };
 
 // Edit Vehicle (nama/plate/gambar/roadtax selepas daftar)
@@ -891,7 +894,7 @@ window.submitEditVehicle = async function () {
     plateNo: plateNo || null,
     roadtaxExpiry: roadtaxExpiry || null,
     photoBase64: editVehiclePhotoData || null
-  }), "Kenderaan dikemaskini ✅", "Gagal kemaskini");
+  }), "Kenderaan dikemaskini ", "Gagal kemaskini");
 };
 
 // ---------- LESEN MEMANDU: MODAL ----------
@@ -911,7 +914,7 @@ function licenseClassRowHTML(selectedClass, expiry) {
         <label for="${expiryId}">Tarikh Luput</label>
         <input id="${expiryId}" type="date" data-field="expiry" value="${expiry || ""}">
       </div>
-      <button type="button" class="class-row-delete" aria-label="Padam kelas lesen ini" onclick="this.closest('[data-license-row]').remove()">✕</button>
+      <button type="button" class="class-row-delete" aria-label="Padam kelas lesen ini" onclick="this.closest('[data-license-row]').remove()">${icon("x")}</button>
     </div>
   `;
 }
@@ -926,7 +929,7 @@ window.addLicenseClassRow = function () {
   rowsEl.insertAdjacentHTML("beforeend", licenseClassRowHTML("", ""));
 };
 window.submitLicense = async function () {
-  if (!currentUid) return showToast("Sila log masuk dahulu");
+  if (!currentUid) return showToast("Sila log masuk dahulu", "error");
   const rowsEl = document.getElementById("licenseClassRows");
   const classes = [];
   rowsEl.querySelectorAll("[data-license-row]").forEach((row) => {
@@ -936,7 +939,7 @@ window.submitLicense = async function () {
   });
   closeModal("licenseModal");
   runWrite(setDoc(doc(db, "driverLicenses", currentUid), { classes, updatedAt: serverTimestamp() }),
-    "Lesen dikemaskini ✅", "Gagal simpan lesen");
+    "Lesen dikemaskini ", "Gagal simpan lesen");
 };
 
 // Edit Interval (satu item, selepas daftar)
@@ -965,7 +968,7 @@ window.submitEditInterval = async function () {
   closeModal("editIntervalModal");
   runWrite(updateDoc(doc(db, "vehicles", vehicleId), {
     [`intervals.${itemKey}`]: intervals[itemKey]
-  }), "Interval dikemaskini ✅", "Gagal kemaskini interval");
+  }), "Interval dikemaskini ", "Gagal kemaskini interval");
 };
 
 // Update Mileage
@@ -988,7 +991,7 @@ window.submitUpdateMileage = async function () {
   }
   closeModal("updateMileageModal");
   runWrite(updateDoc(doc(db, "vehicles", mileageTargetId), { currentMileage: m.value }),
-    "Mileage dikemaskini ✅", "Gagal kemaskini mileage");
+    "Mileage dikemaskini ", "Gagal kemaskini mileage");
 };
 
 // Log Service
@@ -1052,7 +1055,7 @@ window.submitLogService = async function () {
     update = { [`serviceLog.${itemKey}`]: entry, currentMileage: newCurrent };
   }
   closeModal("logServiceModal");
-  runWrite(updateDoc(doc(db, "vehicles", vehicleId), update), "Servis direkodkan ✅", "Gagal rekod servis");
+  runWrite(updateDoc(doc(db, "vehicles", vehicleId), update), "Servis direkodkan ", "Gagal rekod servis");
 };
 
 // Custom Items
@@ -1083,7 +1086,7 @@ window.submitAddCustomItem = async function () {
   const customItems = [...(v.customItems || []), newItem];
   closeModal("addCustomItemModal");
   runWrite(updateDoc(doc(db, "vehicles", customItemTargetVehicle), { customItems }),
-    "Item ditambah ✅", "Gagal tambah item");
+    "Item ditambah ", "Gagal tambah item");
 };
 window.deleteCustomItem = function (vehicleId, itemId) {
   const v = vehicles.find((x) => x.id === vehicleId);
