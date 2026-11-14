@@ -1,5 +1,6 @@
 // ============================================================
 // Jadual Servis — Interval untuk setiap jenis kenderaan
+// `icon` = nama ikon Lucide (lihat icons.js)
 // Semua nilai boleh diedit dari sini (km / bulan)
 // ============================================================
 
@@ -7,7 +8,7 @@ const VEHICLE_TYPES = {
   persona16: {
     label: "Proton Persona 1.6",
     vehicleClass: "car",
-    icon: "🚗",
+    icon: "car",
     items: {
       engine_oil: {
         label: "Minyak Enjin (Minyak Hitam)",
@@ -27,7 +28,7 @@ const VEHICLE_TYPES = {
   nmax155: {
     label: "Yamaha NMAX 155 V3",
     vehicleClass: "motor",
-    icon: "🛵",
+    icon: "scooter",
     items: {
       engine_oil: {
         label: "Minyak Enjin (Minyak Hitam)",
@@ -49,7 +50,7 @@ const VEHICLE_TYPES = {
   lagenda115fi: {
     label: "Yamaha Lagenda 115 FI",
     vehicleClass: "motor",
-    icon: "🛵",
+    icon: "scooter",
     items: {
       engine_oil: {
         label: "Minyak Enjin (Minyak Hitam)",
@@ -71,7 +72,7 @@ const VEHICLE_TYPES = {
   custom: {
     label: "Kenderaan Lain (Custom)",
     vehicleClass: "custom",
-    icon: "🚘",
+    icon: "car-front",
     items: {
       engine_oil: {
         label: "Minyak Enjin (Minyak Hitam)",
@@ -94,13 +95,13 @@ const VEHICLE_TYPES = {
   helikopter: {
     label: "Helikopter",
     vehicleClass: "other",
-    icon: "🚁",
+    icon: "helicopter",
     items: {}
   },
   basikal: {
     label: "Basikal",
     vehicleClass: "other",
-    icon: "🚲",
+    icon: "bike",
     items: {}
   }
 };
