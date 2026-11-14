@@ -295,11 +295,20 @@ window.activateOnKey = function (e) {
 // Modal ialah <dialog>; showModal() pindahkan fokus ke dalam, perangkap Tab,
 // dan Escape tutup. Kita simpan elemen yang buka modal supaya fokus kembali ke situ.
 const modalReturnFocus = {};
+// Kunci skrol halaman belakang selagi ada popup terbuka.
+function lockPageScroll() {
+  document.documentElement.classList.add("scroll-locked");
+}
+function unlockPageScrollIfIdle() {
+  if (!document.querySelector("dialog[open]")) document.documentElement.classList.remove("scroll-locked");
+}
+
 function openModal(id) {
   const dlg = document.getElementById(id);
   clearFieldErrors(dlg);
   modalReturnFocus[id] = document.activeElement;
   if (!dlg.open) dlg.showModal();
+  lockPageScroll();
 }
 window.closeModal = function (id) {
   const dlg = document.getElementById(id);
@@ -307,6 +316,7 @@ window.closeModal = function (id) {
 };
 document.querySelectorAll("dialog.modal-overlay").forEach((dlg) => {
   dlg.addEventListener("close", () => {
+    unlockPageScrollIfIdle();
     const back = modalReturnFocus[dlg.id];
     // Detail view dirender semula bila data berubah — kalau butang asal dah tiada, fokus ke tajuk.
     if (back && back.isConnected) back.focus();
@@ -476,6 +486,8 @@ function computeItemStatus(vehicle, itemKey, itemDef, ignoreDefer = false) {
     status,
     statusLabel: statusLabel(status),
     deferred,
+    intervalKm,
+    intervalMonths,
     nextDueKm,
     nextDueDate,
     remainingKm,
@@ -502,7 +514,74 @@ function computeCustomItemStatus(vehicle, item) {
   if (kmOverdue || dateOverdue) status = "danger";
   else if (kmWarn || dateWarn) status = "warn";
 
-  return { status, statusLabel: statusLabel(status), nextDueKm, nextDueDate, remainingKm, remainingDays };
+  return {
+    status, statusLabel: statusLabel(status), nextDueKm, nextDueDate, remainingKm, remainingDays,
+    intervalKm: item.kmInterval ? Number(item.kmInterval) : null,
+    intervalMonths: item.monthsInterval ? Number(item.monthsInterval) : null
+  };
+}
+
+// ---------- HERO (info utama setiap kad) ----------
+// Pecahan interval yang tinggal untuk km dan tarikh — nilai kecil = lebih mendesak.
+function urgencyParts(s) {
+  const km = s.remainingKm != null ? s.remainingKm / (s.intervalKm || 10000) : Infinity;
+  const days = s.remainingDays != null ? s.remainingDays / ((s.intervalMonths || 12) * 30.44) : Infinity;
+  return { km, days };
+}
+function urgency(s) {
+  const u = urgencyParts(s);
+  return Math.min(u.km, u.days);
+}
+function durationText(days) {
+  const a = Math.abs(days);
+  if (a > 60) { const m = Math.round(a / 30.44); return t(m === 1 ? "hero.month" : "hero.months", { n: m }); }
+  return t(a === 1 ? "hero.day" : "hero.days", { n: a });
+}
+// "2,000 km lagi" / "Lewat 2,500 km" / "17 hari lagi" — ikut mana yang lebih dekat.
+function itemHeroText(s) {
+  const u = urgencyParts(s);
+  if (u.km === Infinity && u.days === Infinity) return null;
+  if (u.km <= u.days) {
+    if (s.remainingKm === 0) return t("hero.now");
+    return s.remainingKm > 0 ? t("hero.left", { v: fmtKm(s.remainingKm) }) : t("hero.over", { v: fmtKm(-s.remainingKm) });
+  }
+  if (s.remainingDays === 0) return t("hero.now");
+  return s.remainingDays > 0 ? t("hero.left", { v: durationText(s.remainingDays) }) : t("hero.over", { v: durationText(s.remainingDays) });
+}
+function dueAtText(km, date) {
+  const v = [km != null ? fmtKm(km) : null, date ? fmtDate(date) : null].filter(Boolean).join(" · ");
+  return v ? t("hero.dueAt", { v }) : "";
+}
+// Untuk tarikh luput (cukai jalan, lesen).
+function expiryHeroText(days) {
+  if (days == null) return null;
+  if (days === 0) return t("hero.expiresToday");
+  return days > 0 ? t("hero.expiresIn", { v: durationText(days) }) : t("hero.expiredAgo", { v: durationText(days) });
+}
+// Hero kad kenderaan: item paling mendesak, atau "Semua servis terkini".
+function vehicleHero(v) {
+  const td = typeDef(v.typeKey);
+  const all = [];
+  Object.entries(td.items).forEach(([k, def]) => all.push({ label: tr(def.label), s: computeItemStatus(v, k, def) }));
+  (v.customItems || []).forEach((it) => all.push({ label: escapeHtml(it.label), s: computeCustomItemStatus(v, it) }));
+  if (v.roadtaxExpiry) {
+    const rs = computeDateOnlyStatus(v.roadtaxExpiry);
+    all.push({ label: t("vehicle.roadtax"), s: { ...rs, intervalMonths: 12 }, expiry: true });
+  }
+  const live = all.filter((x) => x.s.status !== "na");
+  if (!live.length) return { status: "na", text: t("hero.vehicleNoRecord"), sub: "" };
+  const value = (x) => (x.expiry ? expiryHeroText(x.s.remainingDays) : itemHeroText(x.s));
+  const rank = { danger: 2, warn: 1, ok: 0, deferred: -1 };
+  live.sort((a, b) => rank[b.s.status] - rank[a.s.status] || urgency(a.s) - urgency(b.s));
+  const top = live[0];
+  if (top.s.status === "danger" || top.s.status === "warn") {
+    const more = live.filter((x) => x.s.status === "danger" || x.s.status === "warn").length - 1;
+    return { status: top.s.status, text: `${top.label}: ${value(top)}`, sub: more > 0 ? t("hero.more", { n: more }) : "" };
+  }
+  // "Seterusnya" ikut jarak sebenar (km dulu, kemudian hari), bukan peratus interval.
+  const next = live.filter((x) => x.s.status === "ok" && value(x))
+    .sort((a, b) => (a.s.remainingKm ?? Infinity) - (b.s.remainingKm ?? Infinity) || (a.s.remainingDays ?? Infinity) - (b.s.remainingDays ?? Infinity))[0];
+  return { status: "ok", text: t("hero.allGood"), sub: next ? t("hero.next", { item: next.label, v: value(next) }) : "" };
 }
 
 function worstStatus(vehicle) {
@@ -676,10 +755,14 @@ function renderVehicleList() {
     const status = worstStatus(v);
     const hasName = !!v.vehicleName;
     const thumbHtml = v.photoBase64 ? `<img src="${v.photoBase64}" class="vehicle-thumb" alt="">` : "";
+    const hero = vehicleHero(v);
+    // Cukai jalan cuma dipapar di kad bila dah dekat (≤30 hari) atau tamat — dan bukan dah jadi hero.
     let roadtaxLine = "";
     if (v.roadtaxExpiry) {
       const rs = computeDateOnlyStatus(v.roadtaxExpiry);
-      roadtaxLine = `<div class="vehicle-roadtax">${icon("id-card", { size: 14 })} ${t("vehicle.roadtax")}: ${fmtDate(v.roadtaxExpiry)} (${daysText(rs.remainingDays)})</div>`;
+      if (rs.status !== "ok" && !hero.text.startsWith(t("vehicle.roadtax"))) {
+        roadtaxLine = `<span>${icon("id-card", { size: 14 })} ${t("vehicle.roadtax")}: ${expiryHeroText(rs.remainingDays)}</span>`;
+      }
     }
 
     const card = document.createElement("div");
@@ -701,8 +784,12 @@ function renderVehicleList() {
         </div>
         <span class="status-badge status-${status}">${statusLabel(status)}</span>
       </div>
-      <div class="vehicle-mileage">${t("vehicle.mileage")}: <strong>${fmtKm(v.currentMileage)}</strong></div>
-      ${roadtaxLine}
+      <div class="vehicle-hero hero-${hero.status}">${hero.text}</div>
+      ${hero.sub ? `<div class="vehicle-hero-sub">${hero.sub}</div>` : ""}
+      <div class="vehicle-foot">
+        <span>${t("vehicle.mileage")}: ${fmtKm(v.currentMileage)}</span>
+        ${roadtaxLine}
+      </div>
     `;
     listEl.appendChild(card);
   });
@@ -732,12 +819,18 @@ function renderLicenseCard() {
   });
   badgeEl.className = "status-badge status-" + worst;
   badgeEl.textContent = worst === "na" ? "-" : statusLabel(worst);
-  bodyEl.innerHTML = classes.map((c) => {
+  // Hero: kelas yang paling dekat tamat.
+  const dated = classes.filter((c) => c.expiry).map((c) => ({ c, s: computeDateOnlyStatus(c.expiry) }))
+    .sort((a, b) => a.s.remainingDays - b.s.remainingDays);
+  const heroHtml = dated.length
+    ? `<div class="license-hero hero-${dated[0].s.status}">${t("hero.license", { cls: escapeHtml(dated[0].c.class), v: expiryHeroText(dated[0].s.remainingDays) })}</div>`
+    : "";
+  bodyEl.innerHTML = heroHtml + `<div class="license-list">` + classes.map((c) => {
     const found = JPJ_LICENSE_CLASSES.find((x) => x.value === c.class);
     const label = found ? tr(found.label) : c.class;
     const s = computeDateOnlyStatus(c.expiry);
     return `${escapeHtml(label)} — ${c.expiry ? fmtDate(c.expiry) : t("license.noDate")} (${s.statusLabel})`;
-  }).join("<br>");
+  }).join("<br>") + `</div>`;
 }
 
 // ---------- DETAIL VIEW ----------
@@ -784,9 +877,10 @@ function renderDetail(id) {
         <span class="item-label">${icon("id-card")} ${t("vehicle.roadtax")}</span>
         <span class="status-badge status-${rs.status}">${rs.statusLabel}</span>
       </div>
-      <div class="item-meta">${v.roadtaxExpiry
-        ? `${t("roadtax.expires")}: <strong>${fmtDate(v.roadtaxExpiry)}</strong> (${daysText(rs.remainingDays)})`
-        : t("roadtax.notSet")}</div>
+      ${v.roadtaxExpiry
+        ? `<div class="item-hero">${expiryHeroText(rs.remainingDays)}</div>
+           <div class="item-sub">${t("roadtax.expires")}: ${fmtDate(v.roadtaxExpiry)}</div>`
+        : `<div class="item-meta">${t("roadtax.notSet")}</div>`}
     </div>
   `;
 
@@ -812,7 +906,10 @@ function renderDetail(id) {
         <button class="btn btn-outline btn-sm" onclick="openEditVehicleModal('${v.id}')">${icon("pencil", { size: 14 })} ${t("detail.editVehicle")}</button>
       </div>
     </div>
-    <div class="vehicle-mileage">${t("vehicle.mileage")}: <strong>${fmtKm(v.currentMileage)}</strong></div>
+    <div class="detail-mileage">
+      <span class="detail-mileage-label">${t("vehicle.mileage")}</span>
+      <span class="detail-mileage-value">${fmtKm(v.currentMileage)}</span>
+    </div>
 
     <div class="section-title">${t("vehicle.roadtax")}</div>
     <div class="item-list">${roadtaxHtml}</div>
@@ -837,72 +934,93 @@ function intervalSummaryText(def, eff) {
   return part(eff) || t("item.noInterval");
 }
 
+// Kad item: label → HERO (baki) → bila → butang. Butiran lain dilipat dalam "Butiran".
+function itemCardHTML({ status, statusText, label, hero, sub, actions, details }) {
+  return `
+    <div class="item-card ${status}">
+      <div class="item-top">
+        <span class="item-label">${label}</span>
+        <span class="status-badge status-${status}">${statusText}</span>
+      </div>
+      <div class="item-hero">${hero}</div>
+      ${sub ? `<div class="item-sub">${sub}</div>` : ""}
+      <div class="item-actions">${actions}</div>
+      <details class="item-details">
+        <summary>${t("item.details")}</summary>
+        ${details}
+      </details>
+    </div>
+  `;
+}
+
+function remainingLines(s, kmKey, dateKey) {
+  const out = [];
+  if (s.nextDueKm != null) out.push(`${t(kmKey)}: <strong>${fmtKm(s.nextDueKm)}</strong> (${kmText(s.remainingKm)})`);
+  if (s.nextDueDate != null) out.push(`${t(dateKey)}: <strong>${fmtDate(s.nextDueDate)}</strong> (${daysText(s.remainingDays)})`);
+  return out;
+}
+
 function renderItemCard(vehicle, key, def, s, log) {
   const vehicleId = vehicle.id;
   const eff = effectiveInterval(vehicle, key, def);
-  let metaLines = [];
-  let nextServiceHtml = "";
+  const meta = [];
+  let hero, sub;
   if (s.status === "na") {
-    metaLines.push(t("item.noRecord"));
+    hero = t("hero.noRecord");
+    sub = t("item.noRecord");
+  } else if (s.deferred) {
+    const when = [s.deferred.untilKm != null ? fmtKm(s.deferred.untilKm) : null, s.deferred.untilDate ? fmtDate(s.deferred.untilDate) : null].filter(Boolean).join(" / ");
+    hero = `${icon("clock", { size: 20 })} ${t("hero.deferred")}`;
+    sub = t("item.deferredUntil", { when });
   } else {
-    metaLines.push(`${t("item.last")}: ${log?.lastMileage != null ? fmtKm(log.lastMileage) + " " : ""}(${fmtDate(log?.lastDate)})`);
-    if (s.nextDueKm != null) nextServiceHtml = `<div class="next-due-highlight">${t("item.nextKm")}: <strong>${fmtKm(s.nextDueKm)}</strong> <span class="next-due-sub">(${kmText(s.remainingKm)})</span></div>`;
-    if (s.nextDueDate != null) metaLines.push(`${t("item.nextDate")}: <strong>${fmtDate(s.nextDueDate)}</strong> (${daysText(s.remainingDays)})`);
-    if (s.oilType && def.oilTypes) metaLines.push(`${t("item.oilUsed")}: ${t("oil." + s.oilType)}`);
-    if (log?.lastNote) metaLines.push(`${t("item.note")}: ${escapeHtml(log.lastNote)}`);
+    hero = itemHeroText(s) || t("hero.noInterval");
+    sub = dueAtText(s.nextDueKm, s.nextDueDate);
   }
-  metaLines.push(`${t("item.interval")}: ${intervalSummaryText(def, eff)}`);
-  if (def.note) metaLines.push(`<em>${tr(def.note)}</em>`);
+  if (s.status !== "na") {
+    meta.push(...remainingLines(s, "item.nextKm", "item.nextDate"));
+    meta.push(`${t("item.last")}: ${log?.lastMileage != null ? fmtKm(log.lastMileage) + " " : ""}(${fmtDate(log?.lastDate)})`);
+    if (s.oilType && def.oilTypes) meta.push(`${t("item.oilUsed")}: ${t("oil." + s.oilType)}`);
+    if (log?.lastNote) meta.push(`${t("item.note")}: ${escapeHtml(log.lastNote)}`);
+  }
+  meta.push(`${t("item.interval")}: ${intervalSummaryText(def, eff)}`);
+  if (def.note) meta.push(`<em>${tr(def.note)}</em>`);
 
-  let deferHtml = "";
   let deferBtn = "";
   if (s.deferred) {
-    const when = [s.deferred.untilKm != null ? fmtKm(s.deferred.untilKm) : null, s.deferred.untilDate ? fmtDate(s.deferred.untilDate) : null].filter(Boolean).join(" / ");
-    deferHtml = `<div class="defer-note">${icon("clock", { size: 14 })} <span>${t("item.deferredUntil", { when })}</span></div>`;
     deferBtn = `<button class="item-edit-link" onclick="undeferItem('${vehicleId}', '${key}')">${t("item.deferUndo")}</button>`;
   } else if (canDefer(vehicle, key, s)) {
     deferBtn = `<button class="btn btn-secondary btn-sm" onclick="deferItem('${vehicleId}', '${key}')">${icon("clock", { size: 14 })} ${t("item.defer")}</button>`;
   }
 
-  return `
-    <div class="item-card ${s.status}">
-      <div class="item-top">
-        <span class="item-label">${tr(def.label)}</span>
-        <span class="status-badge status-${s.status}">${s.statusLabel}</span>
-      </div>
-      ${deferHtml}
-      ${nextServiceHtml}
-      <div class="item-meta">${metaLines.join("<br>")}</div>
-      <div class="item-actions">
-        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">${t("item.log")}</button>
-        ${deferBtn}
-        <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} ${t("item.editInterval")}</button>
-      </div>
-    </div>
-  `;
+  return itemCardHTML({
+    status: s.status, statusText: s.statusLabel, label: tr(def.label), hero, sub,
+    actions: `<button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${key}', ${!!def.hasOilType})">${t("item.log")}</button>${deferBtn}`,
+    details: `<div class="item-meta">${meta.join("<br>")}</div>
+      <button class="item-edit-link" onclick="openEditIntervalModal('${vehicleId}', '${key}')">${icon("pencil", { size: 13 })} ${t("item.editInterval")}</button>`
+  });
 }
 
 function renderCustomItemCard(vehicleId, item, s) {
-  let metaLines = [];
+  const meta = [];
+  let hero, sub;
   if (s.status === "na") {
-    metaLines.push(t("custom.noRecord"));
+    hero = t("hero.noRecord");
+    sub = t("custom.noRecord");
   } else {
-    if (s.nextDueKm != null) metaLines.push(`${t("custom.nextKm")}: <strong>${fmtKm(s.nextDueKm)}</strong> (${kmText(s.remainingKm)})`);
-    if (s.nextDueDate != null) metaLines.push(`${t("custom.nextDate")}: <strong>${fmtDate(s.nextDueDate)}</strong>`);
+    hero = itemHeroText(s) || t("hero.noInterval");
+    sub = dueAtText(s.nextDueKm, s.nextDueDate);
+    meta.push(...remainingLines(s, "custom.nextKm", "custom.nextDate"));
+    meta.push(`${t("item.last")}: ${item.lastMileage != null ? fmtKm(item.lastMileage) + " " : ""}(${fmtDate(item.lastDate)})`);
+    if (item.lastNote) meta.push(`${t("item.note")}: ${escapeHtml(item.lastNote)}`);
   }
-  return `
-    <div class="item-card ${s.status}">
-      <div class="item-top">
-        <span class="item-label">${escapeHtml(item.label)}</span>
-        <span class="status-badge status-${s.status}">${s.statusLabel}</span>
-      </div>
-      <div class="item-meta">${metaLines.join("<br>")}</div>
-      <div class="item-actions">
-        <button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${item.id}', false, true)">${t("custom.log")}</button>
-        <button class="btn btn-secondary btn-sm" onclick="deleteCustomItem('${vehicleId}', '${item.id}')">${t("custom.delete")}</button>
-      </div>
-    </div>
-  `;
+  const iv = [s.intervalKm ? fmtKm(s.intervalKm) : null, s.intervalMonths ? monthsText(s.intervalMonths) : null].filter(Boolean).join(" / ");
+  meta.push(`${t("item.interval")}: ${iv || t("item.noInterval")}`);
+  return itemCardHTML({
+    status: s.status, statusText: s.statusLabel, label: escapeHtml(item.label), hero, sub,
+    actions: `<button class="btn btn-primary btn-sm" onclick="openLogServiceModal('${vehicleId}', '${item.id}', false, true)">${t("custom.log")}</button>
+      <button class="btn btn-secondary btn-sm" onclick="deleteCustomItem('${vehicleId}', '${item.id}')">${t("custom.delete")}</button>`,
+    details: `<div class="item-meta">${meta.join("<br>")}</div>`
+  });
 }
 
 // ---------- MODALS ----------
